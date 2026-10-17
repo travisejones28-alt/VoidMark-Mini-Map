@@ -5,6 +5,10 @@ local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
 local drawer, drawerToggle, coordinates
 local drawerEntries, drawerSeen = {}, {}
+local buttonDragInProgress = false
+local function InEditMode()
+    return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
+end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
 local defaults = { size = 300, locked = true, clock = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
@@ -113,7 +117,7 @@ local function LayoutControls()
             control:SetScale(scale)
             control:ClearAllPoints()
             local point, relative, relativePoint, x, y = RimPoint(count)
-            control:SetPoint("CENTER",relative,relativePoint,x,y)
+            control:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
             count = count + 1
         end
     end
@@ -122,13 +126,15 @@ end
 
 local function LayoutDrawer()
     if not drawer then return end
-    if InCombatLockdown() then pending = true; return end
+    if InCombatLockdown() or InEditMode() or buttonDragInProgress then pending = true; return end
     local function Add(button, disableMouseDrag)
         if not button or drawerSeen[button] or (button.IsProtected and button:IsProtected()) then return end
         if not button.GetParent or not button.GetNumPoints then return end
         local entry = {button=button, parent=button:GetParent(), scale=button:GetScale(),
             strata=button:GetFrameStrata(),level=button:GetFrameLevel(),points={},scripts={}}
         for i=1,button:GetNumPoints() do entry.points[i]={button:GetPoint(i)} end
+        -- While controlled by the rim, do not allow icon libraries to drag
+        -- these buttons back onto the minimap. Restore handlers on release.
         if disableMouseDrag then
             for _,name in ipairs({"OnDragStart","OnDragStop"}) do
                 entry.scripts[#entry.scripts+1]={name,button:GetScript(name)}
@@ -159,10 +165,10 @@ local function LayoutDrawer()
     if lib and lib.GetButtonList and lib.GetMinimapButton then
         local names=lib:GetButtonList()
         table.sort(names)
-        for _,name in ipairs(names) do Add(lib:GetMinimapButton(name)) end
+        for _,name in ipairs(names) do Add(lib:GetMinimapButton(name),true) end
     end
     Add(_G.VoidMarkNexusMinimap,true)
-    Add(_G.VoidMarkMinimapButton)
+    Add(_G.VoidMarkMinimapButton,true)
     local count=0
     for _,control in ipairs(controls) do if control:IsShown() then count=count+1 end end
     for _,entry in ipairs(drawerEntries) do
@@ -172,7 +178,7 @@ local function LayoutDrawer()
             button:SetScale(scale)
             button:ClearAllPoints()
             local point,relative,relativePoint,x,y=RimPoint(count)
-            button:SetPoint("CENTER",relative,relativePoint,x,y)
+            button:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
             count=count+1
         end
     end
@@ -241,7 +247,7 @@ end
 
 local function Apply()
     if not ready then return end
-    if InCombatLockdown() then pending = true; UpdateOptions(); return end
+    if InCombatLockdown() or InEditMode() then pending = true; UpdateOptions(); return end
     if applying then return end
     applying = true
     db.size = Size(db.size)
@@ -376,12 +382,23 @@ local function Initialize()
     mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
     for _, name in ipairs({"MinimapBorder", "MinimapBorderTop", "MinimapBackdrop",
-        "MinimapZoneTextButton", "MinimapZoomIn", "MinimapZoomOut",
+        "MinimapZoneTextButton", "MinimapZoneText", "MinimapZoomIn", "MinimapZoomOut",
         "TimeManagerClockButton", "GameTimeFrame", "MinimapClusterBorderTop"}) do
         local object = _G[name]
         if object then
             object:Hide()
             if object.HookScript then object:HookScript("OnShow", function(self) self:Hide() end) end
+        end
+    end
+    -- Newer clients expose the zone header as children of MinimapCluster.
+    -- Hide both generations; do not hide the cluster itself (Edit Mode owns it).
+    if MinimapCluster then
+        for _, object in ipairs({MinimapCluster.ZoneTextButton,
+            MinimapCluster.BorderTop}) do
+            if object then
+                object:Hide()
+                if object.HookScript then object:HookScript("OnShow",function(self) self:Hide() end) end
+            end
         end
     end
     header = CreateFrame("Frame", nil, holder)
@@ -475,6 +492,11 @@ local function Initialize()
         local zoom = self:GetZoom() + (delta > 0 and 1 or -1)
         self:SetZoom(math.max(0, math.min(self:GetZoomLevels()-1, zoom)))
     end)
+    if EditModeManagerFrame and EditModeManagerFrame.HookScript then
+        EditModeManagerFrame:HookScript("OnHide",function()
+            if ready and not InCombatLockdown() then Apply() end
+        end)
+    end
     ready = true
     Apply()
     Say("Loaded. /vmm opens settings.")
