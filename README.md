@@ -70,3 +70,9 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 - Stop Nexus's mouse-down/OnUpdate circular drag loop while perimeter collection is enabled. Preserve click actions and restore all original mouse/update scripts when collection is disabled.
 - Hide the default addon compartment and the native daylight texture as well as its parent. Confirmed native chrome is handled outside combat even if protected; protected addon icons remain excluded from collection.
 - Regression tests cover Nexus's actual drag mechanism, restoration, clicks, protected native sun/addon controls and combat deferral.
+
+## 0.1.5
+
+- Nexus square positioning now also works with the saved addon-collection option turned off. Its native drag and click handlers stay intact; circular anchors are projected onto the square perimeter with combat/Edit Mode deferral.
+- Hide Forever's actual day/night indicator, `MinimapCluster.DielFrame`. It is separate from `GameTimeFrame` (the calendar), as confirmed in the Forever client UI source: https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_Minimap/Camelot/Diel.lua
+- Tests reproduce collection disabled, nine Nexus angles, combat recovery, and daylight-frame re-show attempts.

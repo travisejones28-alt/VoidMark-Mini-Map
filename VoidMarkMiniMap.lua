@@ -84,6 +84,37 @@ local function RimPoint(index)
     return "TOPLEFT", holder, "TOPLEFT", offset, 14
 end
 
+-- Nexus keeps its own circular positioning when addon collection is disabled.
+-- Project only that button's CENTER anchors onto the square, preserving its
+-- mouse/click handlers and saved angle. Hooks remain inert during combat/Edit Mode.
+local nexusHooks = {}
+local function AdaptNexusShape()
+    local button = _G.VoidMarkNexusMinimap or (_G.VoidMarkNexus and _G.VoidMarkNexus.minimap)
+    if not button or not hooksecurefunc or (button.IsProtected and button:IsProtected()) then return end
+    if not nexusHooks[button] then
+        local adjusting = false
+        local function Project(self, point, relative, relativePoint, x, y)
+            if adjusting or not ready or db.drawer then return end
+            if InCombatLockdown() or InEditMode() then pending=true; return end
+            if point~="CENTER" or relative~=Minimap or relativePoint~="CENTER"
+                or type(x)~="number" or type(y)~="number" or (x==0 and y==0) then return end
+            local halfWidth, halfHeight = Minimap:GetWidth()/2+8, Minimap:GetHeight()/2+8
+            local factor = math.min(x~=0 and halfWidth/math.abs(x) or math.huge,
+                y~=0 and halfHeight/math.abs(y) or math.huge)
+            if math.abs(factor-1)<0.0001 then return end
+            adjusting=true
+            self:ClearAllPoints()
+            self:SetPoint("CENTER",Minimap,"CENTER",x*factor,y*factor)
+            adjusting=false
+        end
+        hooksecurefunc(button,"SetPoint",Project)
+        nexusHooks[button]=Project
+    end
+    if button.GetNumPoints and button:GetNumPoints()==1 then
+        nexusHooks[button](button,button:GetPoint(1))
+    end
+end
+
 local function CollectControls()
     local function Add(control)
         if not control or seenControls[control] or (control.IsProtected and control:IsProtected()) then return end
@@ -96,8 +127,7 @@ local function CollectControls()
     Add(MiniMapTrackingButton)
     Add(MiniMapMailFrame)
     Add(MiniMapWorldMapButton)
-    -- GameTimeFrame is the native day/night icon; leave it hidden rather than
-    -- displaying a second independent clock beside the minimap.
+    -- Calendar and Forever DielFrame day/night chrome are suppressed separately.
     Add(QueueStatusMinimapButton)
     Add(QueueStatusButton)
     Add(MiniMapBattlefieldFrame)
@@ -132,6 +162,7 @@ end
 local function LayoutDrawer()
     if not drawer then return end
     if InCombatLockdown() or InEditMode() or buttonDragInProgress then pending = true; return end
+    AdaptNexusShape()
     local function Add(button, disableMouseDrag, nexusMouseDrag)
         if not button or drawerSeen[button] or (button.IsProtected and button:IsProtected()) then return end
         if not button.GetParent or not button.GetNumPoints then return end
@@ -302,7 +333,8 @@ local function SuppressNativeChrome()
         "MinimapClusterBorderTop"}) do Hide(_G[name]) end
     WalkMinimap(function(frame)
         for _, key in ipairs({"ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
-            "Calendar", "CalendarButton", "GameTimeFrame", "GameTimeTexture", "AddonCompartmentFrame", "AddonCompartment", "ZoneTextButton", "BorderTop"}) do
+            "Calendar", "CalendarButton", "GameTimeFrame", "GameTimeTexture", "DielFrame",
+            "AddonCompartmentFrame", "AddonCompartment", "ZoneTextButton", "BorderTop"}) do
             Hide(frame[key])
         end
         -- Some client versions have anonymous zoom buttons; match their normal

@@ -77,6 +77,13 @@ function Methods:GetChildren()
     return unpack(children)
 end
 function Methods:GetNormalTexture() return self.normal end
+function hooksecurefunc(object, method, callback)
+    local original=object[method]
+    object[method]=function(self,...)
+        original(self,...)
+        callback(self,...)
+    end
+end
 UIParent=CreateFrame("Frame")
 UIParent:SetSize(1920,1080)
 Minimap=CreateFrame("Minimap")
@@ -318,6 +325,35 @@ event("PLAYER_REGEN_ENABLED")
 assert(not AddonCompartmentFrame:IsShown() and not GameTimeFrame:IsShown())
 assert(not GameTimeTexture:IsShown())
 assert(AddonCompartmentFrame.parent==GameTimeFrame.parent)
+-- Reproduce the user's saved drawer=false setting with Nexus's real circular anchors.
+VoidMarkMiniMapDB.drawer=false
+controller.scripts.OnUpdate(controller,2)
+local nexus=VoidMarkNexusMinimap
+local radius=Minimap:GetWidth()/2+8
+for _,angle in ipairs({0,30,45,90,135,180,225,270,315}) do
+    local radians=math.rad(angle)
+    nexus:ClearAllPoints()
+    nexus:SetPoint("CENTER",Minimap,"CENTER",math.cos(radians)*radius,math.sin(radians)*radius)
+    local x,y=nexus.point[4],nexus.point[5]
+    assert(math.abs(math.max(math.abs(x),math.abs(y))-radius)<0.001,
+        "Nexus must follow the square even with collection disabled")
+end
+assert(nexus:GetScript("OnMouseDown")==nexusDown,"Keep native drag with collection off")
+assert(nexus:GetScript("OnMouseUp")==nexusUp)
+combat=true
+nexus:SetPoint("CENTER",Minimap,"CENTER",50,50)
+assert(nexus.point[4]==50,"Square hook must defer during combat")
+combat=false
+event("PLAYER_REGEN_ENABLED")
+assert(math.abs(nexus.point[4]-radius)<0.001,"Reproject after combat")
+MinimapCluster.DielFrame=CreateFrame("Frame",nil,UIParent)
+controller.scripts.OnUpdate(controller,2)
+assert(not MinimapCluster.DielFrame:IsShown(),"Hide Forever's actual day/night frame")
+assert(MinimapCluster.DielFrame.parent==GameTimeFrame.parent)
+MinimapCluster.DielFrame:Show()
+MinimapCluster.DielFrame.hooks.OnShow(MinimapCluster.DielFrame)
+assert(not MinimapCluster.DielFrame:IsShown())
+realPrint("PASS: saved collection-off Nexus square geometry at nine angles, combat recovery, Forever DielFrame")
 realPrint("PASS: Nexus mouse-loop capture/restore, click preservation, protected native daylight/addon compartment")
 realPrint("PASS: nested duplicate coordinates, late/nested/anonymous zoom, sun/calendar, unrelated icons, combat safety")
 realPrint("PASS: startup, corrupt settings, sparse/late controls, combat deferral, commands, drag, resize/UI scale, options, zoom, reset, screen cap")
