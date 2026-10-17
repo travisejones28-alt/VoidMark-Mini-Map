@@ -98,3 +98,8 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 ## 0.1.9
 
 - Put the minimap and its holder in the background UI layer so quest objectives and normal panels render above the terrain. The settings dialog keeps its own higher layer.
+
+## 0.1.10
+
+- Added a saved 24-hour/12-hour AM/PM checkbox in `/vmm` that applies to both server and local clocks. Existing settings default to 24-hour time. Footer spacing accounts for the longer AM/PM labels.
+- Regression tests cover both clock sources, midnight, noon, and changing formats.

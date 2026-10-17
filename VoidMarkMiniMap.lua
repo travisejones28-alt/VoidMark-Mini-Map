@@ -12,7 +12,7 @@ local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
-local defaults = { size = 300, locked = true, clock = true, localClock = false, fps = true, purple = true,
+local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, fps = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -353,7 +353,7 @@ end
 
 local function UpdateCoordinates()
     if not coordinates then return end
-    local left = db.clock and db.localClock and 180 or ((db.clock or db.localClock) and 88 or 8)
+    local left = db.clock and db.localClock and (db.clock24 and 180 or 240) or ((db.clock or db.localClock) and (db.clock24 and 88 or 120) or 8)
     local right = db.fps and 98 or 8
     local available = db.size-left-right
     coordinates:SetShown(db.coordinates and db.size>=260 and available>=90)
@@ -420,16 +420,26 @@ local function UpdateFPS()
     fpsText:SetText(string.format("FPS: %d",math.floor(fps+0.5)))
 end
 
+local function FormatClock(hour,minute)
+    if db.clock24 then return string.format("%02d:%02d",hour,minute) end
+    local display=hour%12
+    if display==0 then display=12 end
+    return string.format("%d:%02d %s",display,minute,hour<12 and "AM" or "PM")
+end
+
 local function UpdateLabels()
     if not ready then return end
     zone:SetText(GetMinimapZoneText() or "")
     local times={}
     if db.clock then
         local hour, minute = GetGameTime()
-        times[#times+1]=string.format("S %02d:%02d",hour,minute)
+        times[#times+1]="S "..FormatClock(hour,minute)
     end
     if db.localClock then
-        times[#times+1]="L "..(date and date("%H:%M") or "--:--")
+        local localTime=date and date("%H:%M")
+        local hour,minute
+        if type(localTime)=="string" then hour,minute=localTime:match("^(%d+):(%d+)$") end
+        times[#times+1]="L "..(hour and minute and FormatClock(tonumber(hour),tonumber(minute)) or "--:--")
     end
     clock:SetText(table.concat(times,"  "))
     clock:SetShown(#times>0)
@@ -443,6 +453,7 @@ local function UpdateOptions()
     lockButton:SetText(db.locked and "Unlock position" or "Lock position")
     options.clock:SetChecked(db.clock)
     options.localClock:SetChecked(db.localClock)
+    options.clock24:SetChecked(db.clock24)
     options.fps:SetChecked(db.fps)
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
@@ -500,7 +511,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 454)
+        options:SetSize(390, 486)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -544,14 +555,15 @@ local function ToggleOptions()
         options.drawer = Check("Place addon buttons around map", -249, "drawer")
         options.fps = Check("Show FPS", -281, "fps")
         options.localClock = Check("Show local clock", -313, "localClock")
+        options.clock24 = Check("Use 24-hour time (off: 12-hour AM/PM)", -345, "clock24")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
-        options.accent:SetPoint("TOPLEFT",22,-354)
+        options.accent:SetPoint("TOPLEFT",22,-386)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-386)
-        compatibility:SetPoint("TOPRIGHT",-22,-386)
+        compatibility:SetPoint("TOPLEFT",22,-418)
+        compatibility:SetPoint("TOPRIGHT",-22,-418)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
