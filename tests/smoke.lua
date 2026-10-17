@@ -86,29 +86,29 @@ combat=false
 event("PLAYER_REGEN_ENABLED")
 if VMM_TEST_CONFLICT then
     assert(not VoidMarkMiniMapFrame,"Conflicting minimap owner must leave native minimap untouched")
-    assert(Minimap.width==140)
+    assert(math.abs(Minimap:GetScale()*140-140)<0.01)
     realPrint("PASS: active minimap conflict pauses styling")
     return
 end
-assert(Minimap.width==300 and Minimap.height==300)
+assert(math.abs(Minimap:GetScale()*140-140)<0.01 and Minimap.height==140 and math.abs(Minimap:GetScale()*140-300)<0.01)
 assert(GetMinimapShape()=="SQUARE")
 assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
 assert(VoidMarkMiniMapDB.locked==true)
-assert(MinimapCluster.Tracking.parent.parent==VoidMarkMiniMapFrame)
-assert(MinimapCluster.MailFrame.parent.parent==VoidMarkMiniMapFrame)
-assert(GameTimeFrame.parent.parent==VoidMarkMiniMapFrame)
+assert(MinimapCluster.Tracking.parent==VoidMarkMiniMapFrame)
+assert(MinimapCluster.MailFrame.parent==VoidMarkMiniMapFrame)
+assert(GameTimeFrame.parent==VoidMarkMiniMapFrame)
 command("size 420")
-assert(Minimap.width==420)
+assert(math.abs(Minimap:GetScale()*140-420)<0.01)
 command("size 99999")
-assert(Minimap.width==600)
+assert(math.abs(Minimap:GetScale()*140-600)<0.01)
 command("size nonsense")
-assert(Minimap.width==600)
+assert(math.abs(Minimap:GetScale()*140-600)<0.01)
 combat=true
 command("size 240")
-assert(Minimap.width==600,"Must not resize during combat")
+assert(math.abs(Minimap:GetScale()*140-600)<0.01,"Must not resize during combat")
 combat=false
 event("PLAYER_REGEN_ENABLED")
-assert(Minimap.width==240)
+assert(math.abs(Minimap:GetScale()*140-240)<0.01)
 command("unlock")
 assert(VoidMarkMiniMapDB.locked==false)
 local drag
@@ -129,7 +129,7 @@ command("size 320")
 assert(VoidMarkMiniMapOptions.status.text=="Changes queued until combat ends.")
 combat=false
 event("PLAYER_REGEN_ENABLED")
-assert(Minimap.width==320)
+assert(math.abs(Minimap:GetScale()*140-320)<0.01)
 command("unlock")
 local grip=VoidMarkMiniMapResize
 grip.scripts.OnDragStart()
@@ -137,7 +137,7 @@ assert(VoidMarkMiniMapFrame.resizing)
 assert(VoidMarkMiniMapDB.point=="TOPLEFT")
 cursorX=980
 grip.scripts.OnUpdate()
-assert(Minimap.width==420,"Resize must account for effective UI scale")
+assert(math.abs(Minimap:GetScale()*140-420)<0.01,"Resize must account for effective UI scale")
 combat=true
 event("PLAYER_REGEN_DISABLED")
 assert(not VoidMarkMiniMapFrame.resizing)
@@ -162,10 +162,10 @@ assert(Minimap:GetZoom()==5)
 for i=1,10 do Minimap.scripts.OnMouseWheel(Minimap,-1) end
 assert(Minimap:GetZoom()==0)
 command("reset")
-assert(Minimap.width==300 and VoidMarkMiniMapDB.locked)
+assert(math.abs(Minimap:GetScale()*140-300)<0.01 and VoidMarkMiniMapDB.locked)
 UIParent:SetSize(400,400)
 command("size 600")
-assert(Minimap.width<=300,"Size must fit screen")
+assert(Minimap:GetScale()*140<=300,"Size must fit screen")
 assert(VoidMarkMiniMapFrame.height<=400,"Dock must fit screen too")
 event("ZONE_CHANGED")
 event("PLAYER_ENTERING_WORLD")
@@ -185,16 +185,16 @@ local lib={GetButtonList=function() return {"Test","Hidden","Protected"} end,
     GetMinimapButton=function(_,name) return ({Test=icon,Hidden=hidden,Protected=protected})[name] end}
 LibStub=function() return lib end
 controller.scripts.OnUpdate(controller,2)
-assert(icon.parent==VoidMarkMiniMapDrawer)
-assert(not icon:GetScript("OnDragStart"))
+assert(icon.parent==VoidMarkMiniMapFrame)
+assert(icon:GetScript("OnDragStart")==dragStart)
 assert(not hidden:IsShown())
 assert(protected.parent==Minimap)
-assert(not VoidMarkMiniMapDrawer:IsShown(),"Drawer defaults closed")
+assert(not VoidMarkMiniMapDrawer:IsShown(),"Addon icons now stay on perimeter")
 local capturedScale=icon:GetScale()
 combat=true
 VoidMarkMiniMapDB.drawer=false
 controller.scripts.OnUpdate(controller,2)
-assert(icon.parent==VoidMarkMiniMapDrawer,"Restoration must wait until combat ends")
+assert(icon.parent==VoidMarkMiniMapFrame,"Restoration must wait until combat ends")
 combat=false
 event("PLAYER_REGEN_ENABLED")
 assert(icon.parent==Minimap and icon:GetScale()==1)
