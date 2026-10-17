@@ -94,7 +94,10 @@ local function CollectControls()
         control:SetFrameLevel(holder:GetFrameLevel()+8)
     end
     Add(MiniMapTracking)
+    Add(MiniMapTrackingButton)
     Add(MiniMapMailFrame)
+    Add(MiniMapCalendarButton)
+    Add(MiniMapWorldMapButton)
     -- GameTimeFrame is the native day/night icon; leave it hidden rather than
     -- displaying a second independent clock beside the minimap.
     Add(QueueStatusMinimapButton)
@@ -102,6 +105,8 @@ local function CollectControls()
     Add(MiniMapBattlefieldFrame)
     if MinimapCluster then
         Add(MinimapCluster.Tracking)
+        Add(MinimapCluster.TrackingButton)
+        Add(MinimapCluster.Calendar)
         Add(MinimapCluster.MailFrame)
         Add(MinimapCluster.InstanceDifficulty)
     end
@@ -227,6 +232,30 @@ local function RecoverPosition()
     x=math.max(0,math.min(math.max(0,width-w),x))
     top=math.max(math.min(h,height),math.min(height,top))
     db.point,db.x,db.y="TOPLEFT",x,top-height
+end
+
+-- Some Forever layouts expose a second coordinate FontString on the native
+-- minimap/cluster. Hide only duplicate coordinate text, not unrelated regions.
+local function SuppressNativeCoordinates()
+    local function Inspect(frame)
+        if not frame or not frame.GetRegions then return end
+        local regions={frame:GetRegions()}
+        for _,region in ipairs(regions) do
+            if region and region.IsObjectType and region:IsObjectType("FontString")
+                and region ~= coordinates and region.GetText then
+                local value=region:GetText()
+                if type(value)=="string" and value:match("^%s*%d+%.%d+%s*,%s*%d+%.%d+%s*$") then
+                    region:SetAlpha(0)
+                end
+            end
+        end
+    end
+    Inspect(Minimap)
+    Inspect(MinimapCluster)
+    if Minimap and Minimap.GetChildren then
+        local children={Minimap:GetChildren()}
+        for _,child in ipairs(children) do Inspect(child) end
+    end
 end
 
 local function UpdateCoordinates()
@@ -595,4 +624,5 @@ VM:SetScript("OnUpdate", function(_, delta)
     if rimElapsed>=0.2 then rimElapsed=0; RefreshRim() end
     if coordinateElapsed>=0.5 then coordinateElapsed=0; UpdateCoordinates() end
     if drawerElapsed>=2 then drawerElapsed=0; LayoutDrawer(); if VM.suppressZoom then VM.suppressZoom() end end
+    if coordinateElapsed==0 then SuppressNativeCoordinates() end
 end)
