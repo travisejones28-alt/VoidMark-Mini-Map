@@ -72,10 +72,10 @@ local function RimPoint(index)
     local perSide = math.max(1, math.floor((db.size - 40) / step))
     local side = math.floor(index / perSide) % 4
     local offset = 24 + (index % perSide) * step
-    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 13, -28-offset end
-    if side == 1 then return "BOTTOMRIGHT", holder, "BOTTOMRIGHT", -offset, -12 end
-    if side == 2 then return "BOTTOMLEFT", holder, "BOTTOMLEFT", -13, 25+offset end
-    return "TOPLEFT", holder, "TOPLEFT", offset, 12
+    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 14, -26-offset end
+    if side == 1 then return "BOTTOMRIGHT", holder, "BOTTOMRIGHT", -offset, -14 end
+    if side == 2 then return "BOTTOMLEFT", holder, "BOTTOMLEFT", -14, 25+offset end
+    return "TOPLEFT", holder, "TOPLEFT", offset, 14
 end
 
 local function CollectControls()
@@ -88,7 +88,8 @@ local function CollectControls()
     end
     Add(MiniMapTracking)
     Add(MiniMapMailFrame)
-    Add(GameTimeFrame)
+    -- GameTimeFrame is the native day/night icon; leave it hidden rather than
+    -- displaying a second independent clock beside the minimap.
     Add(QueueStatusMinimapButton)
     Add(QueueStatusButton)
     Add(MiniMapBattlefieldFrame)
@@ -112,7 +113,7 @@ local function LayoutControls()
             control:SetScale(scale)
             control:ClearAllPoints()
             local point, relative, relativePoint, x, y = RimPoint(count)
-            control:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
+            control:SetPoint("CENTER",relative,relativePoint,x,y)
             count = count + 1
         end
     end
@@ -171,7 +172,7 @@ local function LayoutDrawer()
             button:SetScale(scale)
             button:ClearAllPoints()
             local point,relative,relativePoint,x,y=RimPoint(count)
-            button:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
+            button:SetPoint("CENTER",relative,relativePoint,x,y)
             count=count+1
         end
     end
@@ -248,12 +249,12 @@ local function Apply()
     RecoverPosition()
     holder:ClearAllPoints()
     holder:SetPoint(db.point, UIParent, db.point, db.x, db.y)
-    -- Forever's minimap renderer retains a native texture size. Scale that
-    -- renderer instead of only enlarging its parent frame.
-    local nativeSize = 140
+    -- Match map geometry to the viewport, without scaling the player arrow.
     Minimap:ClearAllPoints()
-    Minimap:SetScale(db.size/nativeSize)
-    Minimap:SetSize(nativeSize,nativeSize)
+    -- Use native unit scaling: applying a 2x scale also makes the player arrow 2x.
+    -- Allow the map texture and its internal icons to keep their normal sizes.
+    Minimap:SetScale(1)
+    Minimap:SetSize(db.size,db.size)
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
     Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
     if not accents[db.accent] then db.accent="purple" end
@@ -375,7 +376,8 @@ local function Initialize()
     mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
     for _, name in ipairs({"MinimapBorder", "MinimapBorderTop", "MinimapBackdrop",
-        "MinimapZoneTextButton", "MinimapZoomIn", "MinimapZoomOut"}) do
+        "MinimapZoneTextButton", "MinimapZoomIn", "MinimapZoomOut",
+        "TimeManagerClockButton", "GameTimeFrame", "MinimapClusterBorderTop"}) do
         local object = _G[name]
         if object then
             object:Hide()
@@ -384,7 +386,7 @@ local function Initialize()
     end
     header = CreateFrame("Frame", nil, holder)
     header:SetPoint("TOPLEFT", 4, -3)
-    header:SetPoint("TOPRIGHT", -100, -3)
+    header:SetPoint("TOPRIGHT", -28, -3)
     header:SetHeight(22)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
