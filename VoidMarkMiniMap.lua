@@ -1,6 +1,6 @@
 local addonName = ...
 local VM = CreateFrame("Frame")
-local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock
+local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
 local drawer, drawerToggle, coordinates
@@ -23,7 +23,7 @@ local function Number(value, fallback)
 end
 
 local function Size(value)
-    local reservedHeight = 72 + math.ceil(#controls/6)*30
+    local reservedHeight = 44
     local maximum = math.max(180, math.min(600, UIParent:GetWidth()-80, UIParent:GetHeight()-reservedHeight))
     return math.floor(math.max(180, math.min(maximum, Number(value, 300))) + 0.5)
 end
@@ -65,16 +65,26 @@ local function Tooltip(frame, title, detail)
     frame:HookScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
 end
 
+-- Native and addon minimap buttons are distributed along the outside edge.
+-- Keep their original OnClick scripts; only reposition non-protected frames.
+local function RimPoint(index)
+    local step = 29
+    local perSide = math.max(1, math.floor((db.size - 40) / step))
+    local side = math.floor(index / perSide) % 4
+    local offset = 24 + (index % perSide) * step
+    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 13, -28-offset end
+    if side == 1 then return "BOTTOMRIGHT", holder, "BOTTOMRIGHT", -offset, -12 end
+    if side == 2 then return "BOTTOMLEFT", holder, "BOTTOMLEFT", -13, 25+offset end
+    return "TOPLEFT", holder, "TOPLEFT", offset, 12
+end
+
 local function CollectControls()
     local function Add(control)
-        if not control or seenControls[control] then return end
+        if not control or seenControls[control] or (control.IsProtected and control:IsProtected()) then return end
         seenControls[control] = true
         controls[#controls+1] = control
-        control:SetParent(dock)
-        -- Keep native scripts and show/hide rules; fit each control to one dock slot.
-        local dimension = math.max(control:GetWidth(), control:GetHeight(), 1)
-        control:SetScale(math.min(1, 24 / dimension))
-        control:SetFrameLevel(Minimap:GetFrameLevel()+5)
+        control:SetParent(holder)
+        control:SetFrameLevel(holder:GetFrameLevel()+8)
     end
     Add(MiniMapTracking)
     Add(MiniMapMailFrame)
@@ -92,21 +102,23 @@ end
 local function LayoutControls()
     CollectControls()
     db.size = Size(db.size)
-    local columns = math.max(1, math.floor(db.size / 30))
-    local rows = math.ceil(#controls / columns)
-    local dockHeight = rows * 30
-    dock:SetHeight(math.max(1, dockHeight))
-    for index, control in ipairs(controls) do
-        local slot = index-1
-        local scale = control:GetScale()
-        control:ClearAllPoints()
-        control:SetPoint("CENTER", dock, "TOPLEFT", (15+(slot%columns)*30)/scale,
-            (-15-math.floor(slot/columns)*30)/scale)
+    holder:SetSize(db.size+8, db.size+36)
+    mapViewport:SetSize(db.size, db.size)
+    local count = 0
+    for _, control in ipairs(controls) do
+        if control:IsShown() then
+            local dimension = math.max(control:GetWidth(),control:GetHeight(),1)
+            local scale = math.min(1,24/dimension)
+            control:SetScale(scale)
+            control:ClearAllPoints()
+            local point, relative, relativePoint, x, y = RimPoint(count)
+            control:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
+            count = count + 1
+        end
     end
-    holder:SetSize(db.size+8, db.size+52+dockHeight)
+    return count
 end
 
--- Only supported, non-protected addon buttons are moved. Never grab arbitrary minimap children.
 local function LayoutDrawer()
     if not drawer then return end
     if InCombatLockdown() then pending = true; return end
@@ -116,18 +128,16 @@ local function LayoutDrawer()
         local entry = {button=button, parent=button:GetParent(), scale=button:GetScale(),
             strata=button:GetFrameStrata(),level=button:GetFrameLevel(),points={},scripts={}}
         for i=1,button:GetNumPoints() do entry.points[i]={button:GetPoint(i)} end
-        local names = {"OnDragStart", "OnDragStop"}
-        if disableMouseDrag then names[#names+1]="OnMouseDown"; names[#names+1]="OnMouseUp" end
-        for _,name in ipairs(names) do
-            entry.scripts[#entry.scripts+1]={name,button:GetScript(name)}
-            button:SetScript(name,nil)
+        if disableMouseDrag then
+            for _,name in ipairs({"OnDragStart","OnDragStop"}) do
+                entry.scripts[#entry.scripts+1]={name,button:GetScript(name)}
+                button:SetScript(name,nil)
+            end
         end
         drawerSeen[button]=true
         drawerEntries[#drawerEntries+1]=entry
-        button:SetParent(drawer)
-        button:SetFrameStrata("DIALOG")
-        button:SetFrameLevel(drawer:GetFrameLevel()+2)
-        button:SetScale(math.min(1,26/math.max(button:GetWidth(),button:GetHeight(),1)))
+        button:SetParent(holder)
+        button:SetFrameLevel(holder:GetFrameLevel()+8)
     end
     if not db.drawer then
         for _,entry in ipairs(drawerEntries) do
@@ -153,19 +163,20 @@ local function LayoutDrawer()
     Add(_G.VoidMarkNexusMinimap,true)
     Add(_G.VoidMarkMinimapButton)
     local count=0
+    for _,control in ipairs(controls) do if control:IsShown() then count=count+1 end end
     for _,entry in ipairs(drawerEntries) do
         local button=entry.button
         if button:IsShown() then
-            local scale=button:GetScale()
+            local scale=math.min(1,24/math.max(button:GetWidth(),button:GetHeight(),1))
+            button:SetScale(scale)
             button:ClearAllPoints()
-            button:SetPoint("CENTER",drawer,"TOPLEFT",(20+(count%5)*32)/scale,
-                (-20-math.floor(count/5)*32)/scale)
+            local point,relative,relativePoint,x,y=RimPoint(count)
+            button:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
             count=count+1
         end
     end
-    drawer:SetSize(168,math.max(40,math.ceil(count/5)*32+8))
-    drawerToggle:SetText("Addons "..count)
-    drawerToggle:Show()
+    drawer:Hide()
+    drawerToggle:Hide()
 end
 
 local function RecoverPosition()
@@ -237,9 +248,13 @@ local function Apply()
     RecoverPosition()
     holder:ClearAllPoints()
     holder:SetPoint(db.point, UIParent, db.point, db.x, db.y)
+    -- Forever's minimap renderer retains a native texture size. Scale that
+    -- renderer instead of only enlarging its parent frame.
+    local nativeSize = 140
     Minimap:ClearAllPoints()
-    Minimap:SetPoint("TOPLEFT", holder, "TOPLEFT", 4, -26)
-    Minimap:SetSize(db.size, db.size)
+    Minimap:SetScale(db.size/nativeSize)
+    Minimap:SetSize(nativeSize,nativeSize)
+    Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
     Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
@@ -248,10 +263,6 @@ local function Apply()
     else holder:SetBackdropBorderColor(0.2, 0.2, 0.2, 1) end
     header:EnableMouse(not db.locked)
     grip:SetShown(not db.locked)
-    local lib = LibStub and LibStub("LibDBIcon-1.0", true)
-    if lib and lib.GetButtonList and lib.Refresh then
-        for _, name in ipairs(lib:GetButtonList()) do lib:Refresh(name) end
-    end
     LayoutDrawer()
     pending, applying = false, false
     UpdateLabels()
@@ -309,7 +320,7 @@ local function ToggleOptions()
         options.clock = Check("Show server clock", -153, "clock")
         options.purple = Check("Colored border", -185, "purple")
         options.coordinates = Check("Show player coordinates", -217, "coordinates")
-        options.drawer = Check("Collect supported addon buttons", -249, "drawer")
+        options.drawer = Check("Place addon buttons around map", -249, "drawer")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
@@ -359,9 +370,9 @@ local function Initialize()
     Minimap:SetParent(holder)
     Minimap:SetScale(1)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
-    dock = CreateFrame("Frame", nil, holder)
-    dock:SetPoint("TOPLEFT", Minimap, "BOTTOMLEFT", 0, -2)
-    dock:SetPoint("TOPRIGHT", Minimap, "BOTTOMRIGHT", 0, -2)
+    mapViewport = CreateFrame("Frame",nil,holder)
+    mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-26)
+    mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
     for _, name in ipairs({"MinimapBorder", "MinimapBorderTop", "MinimapBackdrop",
         "MinimapZoneTextButton", "MinimapZoomIn", "MinimapZoomOut"}) do
@@ -422,6 +433,7 @@ local function Initialize()
         LayoutDrawer(); drawer:SetShown(not drawer:IsShown())
     end)
     drawerToggle:SetPoint("TOPRIGHT",-28,-3)
+    drawerToggle:Hide()
     Tooltip(drawerToggle,"Addon buttons","Click to open or close. Escape closes the drawer. Hidden addon icons stay hidden.")
     grip = CreateFrame("Button", "VoidMarkMiniMapResize", holder)
     grip:SetSize(18, 18)
