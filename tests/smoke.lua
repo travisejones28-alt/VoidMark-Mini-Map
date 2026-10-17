@@ -562,4 +562,25 @@ assert(not GameTooltip:IsShown(),'Leaving durability must close its own tooltip'
 VoidMarkMiniMapOptions.durability:SetChecked(false)
 VoidMarkMiniMapOptions.durability.scripts.OnClick(VoidMarkMiniMapOptions.durability)
 assert(not hover:IsShown(),'Disabled durability must remove hover interception')
+-- Broker_DurabilityInfo also invalidates on death and resurrection explicitly.
+assert(controller.registered.PLAYER_DEAD and controller.registered.PLAYER_UNGHOST,
+ 'Death/resurrection refresh events must be registered')
+local current,quote=80,2000
+GetInventoryItemDurability=function(slot)if slot==1 then return current,100 end end
+C_TooltipInfo.GetInventoryItem=function()repairReads=repairReads+1;return {repairCost=quote}end
+VoidMarkMiniMapOptions.durability:SetChecked(true)
+VoidMarkMiniMapOptions.durability.scripts.OnClick(VoidMarkMiniMapOptions.durability)
+hover.scripts.OnEnter(hover)
+current=70;quote=3000
+previousReads=repairReads
+event('PLAYER_DEAD');event('PLAYER_DEAD')
+controller.scripts.OnUpdate(controller,.01)
+assert(repairReads==previousReads+1 and GameTooltip.text=='Durability: 70%'
+ and GameTooltip.lines[1]=='Repair cost: 0g 30s 0c','Death must refresh current damage and repair price')
+current=100;quote=0
+event('PLAYER_UNGHOST');controller.scripts.OnUpdate(controller,.01)
+assert(GameTooltip.text=='Durability: 100%' and GameTooltip.lines[1]=='Repair cost: 0g 0s 0c',
+ 'Resurrection after repairs must not keep the old cost')
+hover.scripts.OnLeave(hover)
+realPrint('PASS: explicit death/resurrection repair refresh and repeated-event coalescing')
 realPrint('PASS: compact repair tooltip, no polling, merchant event coalescing, saved estimates and other-tooltip ownership')

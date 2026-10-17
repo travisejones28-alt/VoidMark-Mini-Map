@@ -1,6 +1,6 @@
 # VoidMark Mini Map
 
-Current release: **0.2.1** (Forever Interface **16001**).
+Current release: **0.2.2** (Forever Interface **16001**).
 
 Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
 
@@ -37,12 +37,18 @@ Run `python tests/run.py` with `lupa==2.8` installed. It compiles addon Lua unde
 
 The shared four-addon mocked-client integration also passed locally in both Nexus/Mini Map load orders. These tests inspect handlers, calculated bounds and frame attributes; they do not establish actual Forever rendering, protected execution, repair-event delivery or third-party font appearance.
 
+## 0.2.2 working-addon reference review
+
+Inspected the supplied Broker_DurabilityInfo v1.33 and ImproveAny v1.0.23 Forever archives. Their modern tooltip repair-cost field and Classic third-return-value scanner match our existing API paths. Added explicit death (`PLAYER_DEAD`) and resurrection (`PLAYER_UNGHOST`) refreshes, as used by Broker, so cached tooltip costs do not depend solely on an accompanying durability event. Regression tests verify repeated death-event coalescing and refreshed durability/cost after resurrection.
+
+The reference addons were inspected as source/API examples, not installed or bundled. No automatic repair actions, reputation tables, extra windows, broker dependencies or periodic repair polling were imported. Broker's reputation-normalization model differs from our live vendor-total display and clearly marked vendor-observed estimates; current actual API quotes still take precedence.
+
 ## 0.2.1 repair cost
 
 Hover the existing durability footer segment to see its percentage and one compact line, for example **Repair cost: 2g 61s 57c**. There are no new visible windows, buttons, settings or equipment tables. Disabling or responsively hiding durability also removes its hover area.
 
 - Live equipment prices use `C_TooltipInfo.GetInventoryItem` when it supplies a readable repair cost, with a private hidden tooltip scanner for Classic return values as a fallback. The visible shared GameTooltip is never used for scanning. Fully repaired equipment costs zero; missing, restricted or incomplete prices produce **Repair cost: Unavailable** unless the exact item has a usable saved estimate.
-- Equipment changes and durability events invalidate the result. Merchant opening captures the quote immediately; merchant update bursts are coalesced to one scan per frame. Hover also refreshes it. Repair pricing adds no periodic polling and never performs a repair or intercepts another addon's repair function.
+- Equipment changes, durability events, death and resurrection invalidate the result. Merchant opening captures the quote immediately; merchant update bursts are coalesced to one scan per frame. Hover also refreshes it. Repair pricing adds no periodic polling and never performs a repair or intercepts another addon's repair function.
 - At a repair merchant, the live `GetRepairAllCost` result takes precedence and is marked **(vendor total)** because it can include damaged equipment in bags. That aggregate is never used to train equipment estimates. Closing the merchant returns to equipped-item pricing.
 - Valid per-item vendor observations are saved under the existing per-character `VoidMarkMiniMapDB.repairObservations`. The cache stores at most 64 item-identity/durability records, expires them after 30 days, and refines the observed cost per lost durability point. Repeated identical quotes do not add weight. New or changed gear without observations is not assigned a guessed price.
 - Historical estimates are marked `~` and rounded to silver: **Repair cost: ~2g 62s 0c**. Vendor discounts and client rules can change actual prices, so live API prices always override history. There is no history log or bag-price cache. Existing settings and other footer information remain unchanged.

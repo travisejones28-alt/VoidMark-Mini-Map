@@ -921,7 +921,7 @@ end
 for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
     "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "ADDON_LOADED",
-    "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED", "MERCHANT_SHOW", "MERCHANT_UPDATE"}) do VM:RegisterEvent(event) end
+    "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED", "MERCHANT_SHOW", "MERCHANT_UPDATE", "PLAYER_DEAD", "PLAYER_UNGHOST"}) do VM:RegisterEvent(event) end
 VM:SetScript("OnEvent", function(_, event)
     if event == "MERCHANT_SHOW" then
         merchantOpen=true;repairPending=true
@@ -931,7 +931,8 @@ VM:SetScript("OnEvent", function(_, event)
             if repairHover and repairHover.hovered then ShowDurabilityTooltip() end
         end
     elseif event == "MERCHANT_UPDATE" then if merchantOpen then repairPending=true end
-    elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "MERCHANT_CLOSED" then
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "UPDATE_INVENTORY_DURABILITY"
+        or event == "PLAYER_DEAD" or event == "PLAYER_UNGHOST" or event == "MERCHANT_CLOSED" then
         if event=="MERCHANT_CLOSED" then merchantOpen=false end
         repairPending=true
         if ready then UpdateDurability() end
