@@ -122,6 +122,7 @@ local function CollectControls()
         seenControls[control] = true
         controls[#controls+1] = control
         control:SetParent(holder)
+        control:SetFrameStrata(holder:GetFrameStrata())
         control:SetFrameLevel(holder:GetFrameLevel()+8)
     end
     Add(MiniMapTracking)
@@ -189,6 +190,7 @@ local function LayoutDrawer()
         drawerSeen[button]=true
         drawerEntries[#drawerEntries+1]=entry
         button:SetParent(holder)
+        button:SetFrameStrata(holder:GetFrameStrata())
         button:SetFrameLevel(holder:GetFrameLevel()+8)
     end
     if not db.drawer then
@@ -222,6 +224,7 @@ local function LayoutDrawer()
     for _,entry in ipairs(drawerEntries) do
         local button=entry.button
         if button:IsShown() then
+            button:SetFrameStrata(holder:GetFrameStrata())
             local scale=math.min(1,24/math.max(button:GetWidth(),button:GetHeight(),1))
             button:SetScale(scale)
             button:ClearAllPoints()
@@ -241,7 +244,7 @@ local function RefreshRim()
     local count = 0
     for _,control in ipairs(controls) do
         if control:IsShown() and not (control.IsProtected and control:IsProtected()) then
-            local scale=control:GetScale()
+            local scale=math.max(0.01,Number(control:GetScale(),1))
             local point,rel,relpoint,x,y=RimPoint(count)
             control:ClearAllPoints()
             control:SetPoint("CENTER",rel,relpoint,x/scale,y/scale)
@@ -252,7 +255,7 @@ local function RefreshRim()
         for _,entry in ipairs(drawerEntries) do
             local button=entry.button
             if button:IsShown() and not (button.IsProtected and button:IsProtected()) then
-                local scale=button:GetScale()
+                local scale=math.max(0.01,Number(button:GetScale(),1))
                 local point,rel,relpoint,x,y=RimPoint(count)
                 button:ClearAllPoints()
                 button:SetPoint("CENTER",rel,relpoint,x/scale,y/scale)
@@ -300,7 +303,7 @@ local function SuppressNativeCoordinates()
                 if not (issecretvalue and issecretvalue(value)) and type(value) == "string" then
                     -- Color codes, integer coordinates and optional parentheses occur in addons.
                     value = value:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-                    if value:match("^%s*%(?%s*%d+%.?%d*%s*[,/]%s*%d+%.?%d*%s*%)?%s*$") then
+                    if value:match("^%s*%(?%s*%d+%.?%d*%s*,%s*%d+%.?%d*%s*%)?%s*$") then
                         region:SetAlpha(0)
                     end
                 end
@@ -416,11 +419,15 @@ end
 
 local function UpdateFPS()
     if not fpsText or not fpsText:IsShown() then return end
-    local fps = GetFramerate and GetFramerate() or 0
-    fpsText:SetText(string.format("FPS: %d",math.floor(fps+0.5)))
+    local ok,fps=pcall(function() return GetFramerate and GetFramerate() end)
+    fps=ok and Number(fps,nil) or nil
+    fpsText:SetText(fps and fps>=0 and string.format("FPS: %d",math.floor(fps+0.5)) or "FPS: --")
 end
 
 local function FormatClock(hour,minute)
+    hour,minute=Number(hour,nil),Number(minute,nil)
+    if not hour or not minute or hour<0 or hour>=24 or minute<0 or minute>=60 then return "--:--" end
+    hour,minute=math.floor(hour),math.floor(minute)
     if db.clock24 then return string.format("%02d:%02d",hour,minute) end
     local display=hour%12
     if display==0 then display=12 end
@@ -432,7 +439,8 @@ local function UpdateLabels()
     zone:SetText(GetMinimapZoneText() or "")
     local times={}
     if db.clock then
-        local hour, minute = GetGameTime()
+        local ok,hour,minute=pcall(function() if GetGameTime then return GetGameTime() end end)
+        if not ok then hour,minute=nil,nil end
         times[#times+1]="S "..FormatClock(hour,minute)
     end
     if db.localClock then
@@ -636,7 +644,7 @@ local function Initialize()
     end
     header:SetScript("OnDragStop", StopMoving)
     holder.stopMoving = StopMoving
-    Tooltip(header, "VoidMark Mini Map", "Drag this bar to move the map. /vmm opens settings.")
+    Tooltip(header, "VoidMark Mini Map", "Drag this bar to move the map. /vmini opens settings.")
     zone = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     zone:SetPoint("CENTER", header, "CENTER", 0, 0)
     StyleFooterText(zone)
@@ -734,11 +742,13 @@ local function Initialize()
     end
     ready = true
     Apply()
-    Say("Loaded. /vmm opens settings.")
+    Say("Loaded. /vmini opens settings.")
 end
 
-SLASH_VOIDMARKMINIMAP1 = "/vmm"
+SLASH_VOIDMARKMINIMAP1 = "/vmini"
 SLASH_VOIDMARKMINIMAP2 = "/voidmarkminimap"
+-- Market owns /vmm when both addons load; OptionalDeps establishes that order.
+if not _G.VoidMarkMarket then SLASH_VOIDMARKMINIMAP3 = "/vmm" end
 SlashCmdList.VOIDMARKMINIMAP = function(message)
     if not ready then ToggleOptions(); return end
     local command, value = (message or ""):match("^%s*(%S*)%s*(.-)%s*$")
@@ -747,11 +757,11 @@ SlashCmdList.VOIDMARKMINIMAP = function(message)
         db.locked = command == "lock"; Apply()
         Say(db.locked and "Position locked." or "Drag the zone bar to move the map.")
     elseif command == "size" then
-        if not tonumber(value) then Say("Usage: /vmm size 300 (180-600)"); return end
+        if not tonumber(value) then Say("Usage: /vmini size 300 (180-600)"); return end
         db.size = Size(value); Apply()
     elseif command == "reset" then Reset()
     elseif command == "" then ToggleOptions()
-    else Say("/vmm | /vmm unlock | /vmm lock | /vmm size 350 | /vmm reset") end
+    else Say("/vmini | /vmini unlock | /vmini lock | /vmini size 350 | /vmini reset") end
     if pending then Say("Layout will update after combat.") end
 end
 

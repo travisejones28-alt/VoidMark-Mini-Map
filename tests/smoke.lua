@@ -436,3 +436,20 @@ realPrint("PASS: Nexus mouse-loop capture/restore, click preservation, protected
 realPrint("PASS: nested duplicate coordinates, late/nested/anonymous zoom, sun/calendar, unrelated icons, combat safety")
 realPrint("PASS: startup, corrupt settings, sparse/late controls, combat deferral, commands, drag, resize/UI scale, options, zoom, reset, screen cap")
 realPrint("PASS: drawer capture/restore, protected and hidden icons, coordinates/failure fallback, saved position recovery")
+
+-- Quest counts are not coordinate strings, and temporary zero icon scales are safe.
+local questProgress=Minimap:CreateFontString();questProgress:SetText("1 / 35");questProgress:SetAlpha(1)
+controller.scripts.OnUpdate(controller,.5)
+assert(questProgress.alpha==1,"Quest counters must not be suppressed as coordinates")
+QueueStatusButton:SetScale(0);controller.scripts.OnUpdate(controller,.25)
+for _,v in ipairs(QueueStatusButton.point) do if type(v)=="number" then assert(v==v and math.abs(v)<1e8) end end
+assert(SLASH_VOIDMARKMINIMAP1=="/vmini" and SLASH_VOIDMARKMINIMAP2=="/voidmarkminimap")
+assert(SLASH_VOIDMARKMINIMAP3=="/vmm","Standalone legacy shortcut retained")
+realPrint("PASS: quest progress preserved, zero icon scale bounded, unique minimap commands")
+
+local gameClock,fpsAPI=GetGameTime,GetFramerate
+GetGameTime=function() return nil,nil end;GetFramerate=function() return 0/0 end
+controller.scripts.OnUpdate(controller,2)
+checkClock(true,false,"S --:--")
+GetGameTime,GetFramerate=gameClock,fpsAPI
+realPrint("PASS: unavailable clocks and non-finite FPS do not stop minimap updates")

@@ -1,5 +1,8 @@
 # VoidMark Mini Map
 
+Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
+
+
 Standalone square minimap for WoW Forever (interface 16001). No VoidMark or ElvUI dependency.
 
 ## Install
@@ -8,12 +11,12 @@ Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC and Lua file mus
 
 ## Controls
 
-- `/vmm` or `/voidmarkminimap`: settings window.
-- `/vmm unlock`: drag the zone-name bar to move the map.
+- `/vmini` or `/voidmarkminimap`: settings window.
+- `/vmini unlock`: drag the zone-name bar to move the map.
 - While unlocked, drag the bottom-right `//` handle horizontally to resize. Locking also hides this handle.
-- `/vmm lock`: lock it again.
-- `/vmm size 350`: set map width/height (180-600 UI units, capped to your screen).
-- `/vmm reset`: restore the default 300-unit map and top-right position.
+- `/vmini lock`: lock it again.
+- `/vmini size 350`: set map width/height (180-600 UI units, capped to your screen).
+- `/vmini reset`: restore the default 300-unit map and top-right position.
 - Mouse wheel over the map: zoom. Normal map clicks remain Blizzard's.
 - Gear button: settings. Settings include size, lock, clock, and purple border.
 - Supported addon icons stay around the perimeter. Disable collection in settings to restore each button's original parent, position, scale and drag handlers. Protected buttons are not collected.
@@ -50,7 +53,7 @@ Run `lua tests/smoke.lua` from this directory to repeat the behavior test. These
 
 ### In-game test
 
-1. Open `/vmm`, unlock, move and resize the map, then lock it.
+1. Open `/vmini`, unlock, move and resize the map, then lock it.
 2. Test left/right clicks on supported perimeter icons. Toggle collection off and back on.
 3. Enable coordinates and walk around. Enter an instance if convenient.
 4. Change size during combat and confirm it applies afterward.
@@ -85,14 +88,14 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 
 ## 0.1.7
 
-- Added a saved **Show FPS** checkbox in `/vmm`; it controls both embedded TaliaaFPS and the fallback counter.
+- Added a saved **Show FPS** checkbox in `/vmini`; it controls both embedded TaliaaFPS and the fallback counter.
 - Increased footer text to 14 pixels with a white fill, black outline and shadow for better readability. Widened the FPS slot and suppress center coordinates on maps below 260 units to avoid crowding.
 - Tests cover toggling both FPS paths and periodic layout respecting the saved setting.
 
 ## 0.1.8
 
 - Removed the black header strip; the outlined zone name now sits directly over the terrain, with the settings button at the upper right. The zone area still supports dragging while unlocked.
-- Added independent server and local clock toggles in `/vmm`. Enable either, both, or neither; `S` identifies server time and `L` identifies the computer's local time. Existing server-clock preference is preserved.
+- Added independent server and local clock toggles in `/vmini`. Enable either, both, or neither; `S` identifies server time and `L` identifies the computer's local time. Existing server-clock preference is preserved.
 - Clock labels refresh each second. Footer coordinates move into available space and hide if both clocks plus FPS would crowd them on smaller maps.
 
 ## 0.1.9
@@ -101,5 +104,5 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 
 ## 0.1.10
 
-- Added a saved 24-hour/12-hour AM/PM checkbox in `/vmm` that applies to both server and local clocks. Existing settings default to 24-hour time. Footer spacing accounts for the longer AM/PM labels.
+- Added a saved 24-hour/12-hour AM/PM checkbox in `/vmini` that applies to both server and local clocks. Existing settings default to 24-hour time. Footer spacing accounts for the longer AM/PM labels.
 - Regression tests cover both clock sources, midnight, noon, and changing formats.
