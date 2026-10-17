@@ -6,6 +6,7 @@ local controls, seenControls = {}, {}
 local drawer, drawerToggle, coordinates
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
+local zoomParking
 local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
@@ -76,7 +77,7 @@ local function RimPoint(index)
     local perSide = math.max(1, math.floor((db.size - 40) / step))
     local side = math.floor(index / perSide) % 4
     local offset = 24 + (index % perSide) * step
-    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 14, -26-offset end
+    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 16, -26-offset end
     if side == 1 then return "BOTTOMRIGHT", holder, "BOTTOMRIGHT", -offset, -14 end
     if side == 2 then return "BOTTOMLEFT", holder, "BOTTOMLEFT", -14, 25+offset end
     return "TOPLEFT", holder, "TOPLEFT", offset, 14
@@ -184,6 +185,34 @@ local function LayoutDrawer()
     end
     drawer:Hide()
     drawerToggle:Hide()
+end
+
+-- Blizzard or a button library may write circular anchors again after we move
+-- a button. Periodically reassert the square layout, including after dragging.
+local function RefreshRim()
+    if not ready or InCombatLockdown() or InEditMode() then return end
+    local count = 0
+    for _,control in ipairs(controls) do
+        if control:IsShown() and not (control.IsProtected and control:IsProtected()) then
+            local scale=control:GetScale()
+            local point,rel,relpoint,x,y=RimPoint(count)
+            control:ClearAllPoints()
+            control:SetPoint("CENTER",rel,relpoint,x/scale,y/scale)
+            count=count+1
+        end
+    end
+    if db.drawer then
+        for _,entry in ipairs(drawerEntries) do
+            local button=entry.button
+            if button:IsShown() and not (button.IsProtected and button:IsProtected()) then
+                local scale=button:GetScale()
+                local point,rel,relpoint,x,y=RimPoint(count)
+                button:ClearAllPoints()
+                button:SetPoint("CENTER",rel,relpoint,x/scale,y/scale)
+                count=count+1
+            end
+        end
+    end
 end
 
 local function RecoverPosition()
@@ -381,6 +410,17 @@ local function Initialize()
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-26)
     mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
+    -- Park native zoom buttons outside the map; mousewheel zoom still works.
+    zoomParking=CreateFrame("Frame",nil,UIParent)
+    zoomParking:Hide()
+    for _,button in ipairs({MinimapZoomIn,MinimapZoomOut}) do
+        if button and not (button.IsProtected and button:IsProtected()) then
+            button:SetParent(zoomParking)
+            button:ClearAllPoints()
+            button:SetPoint("CENTER",zoomParking,"CENTER")
+            button:Hide()
+        end
+    end
     for _, name in ipairs({"MinimapBorder", "MinimapBorderTop", "MinimapBackdrop",
         "MinimapZoneTextButton", "MinimapZoneText", "MinimapZoomIn", "MinimapZoomOut",
         "TimeManagerClockButton", "GameTimeFrame", "MinimapClusterBorderTop"}) do
@@ -533,13 +573,15 @@ VM:SetScript("OnEvent", function(_, event)
         if ready then Apply() end
     else UpdateLabels() end
 end)
-local elapsed, coordinateElapsed, drawerElapsed = 0,0,0
+local elapsed, coordinateElapsed, drawerElapsed, rimElapsed = 0,0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 10 then elapsed = 0; UpdateLabels() end
     if not ready then return end
     coordinateElapsed=coordinateElapsed+delta
     drawerElapsed=drawerElapsed+delta
+    rimElapsed=rimElapsed+delta
+    if rimElapsed>=0.2 then rimElapsed=0; RefreshRim() end
     if coordinateElapsed>=0.5 then coordinateElapsed=0; UpdateCoordinates() end
     if drawerElapsed>=2 then drawerElapsed=0; LayoutDrawer() end
 end)
