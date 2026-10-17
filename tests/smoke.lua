@@ -276,6 +276,49 @@ duplicate:SetAlpha(1)
 duplicate:SetText("(55, 39)")
 controller.scripts.OnUpdate(controller,0.5)
 assert(duplicate.alpha==0)
+-- Nexus uses mouse scripts and an OnUpdate loop, not standard drag scripts.
+VoidMarkMiniMapDB.drawer=true
+local nexusDown=function(self) self:SetScript("OnUpdate",function(button)
+    button:SetPoint("CENTER",Minimap,"CENTER",99,99)
+end) end
+local nexusUp=function(self) self:SetScript("OnUpdate",nil) end
+local nexusTick=function() end
+local clicks=0
+VoidMarkNexusMinimap=CreateFrame("Button",nil,Minimap)
+VoidMarkNexusMinimap:SetScript("OnMouseDown",nexusDown)
+VoidMarkNexusMinimap:SetScript("OnMouseUp",nexusUp)
+VoidMarkNexusMinimap:SetScript("OnUpdate",nexusTick)
+VoidMarkNexusMinimap:SetScript("OnClick",function() clicks=clicks+1 end)
+controller.scripts.OnUpdate(controller,2)
+assert(VoidMarkNexusMinimap.parent==VoidMarkMiniMapFrame)
+assert(VoidMarkNexusMinimap.point[2]==VoidMarkMiniMapFrame)
+assert(not VoidMarkNexusMinimap:GetScript("OnMouseDown"))
+assert(not VoidMarkNexusMinimap:GetScript("OnMouseUp"))
+assert(not VoidMarkNexusMinimap:GetScript("OnUpdate"))
+VoidMarkNexusMinimap.scripts.OnClick()
+assert(clicks==1,"Keep Nexus click actions")
+assert(icon:GetScript("OnMouseDown")==nil)
+VoidMarkMiniMapDB.drawer=false
+controller.scripts.OnUpdate(controller,2)
+assert(VoidMarkNexusMinimap:GetScript("OnMouseDown")==nexusDown)
+assert(VoidMarkNexusMinimap:GetScript("OnMouseUp")==nexusUp)
+assert(VoidMarkNexusMinimap:GetScript("OnUpdate")==nexusTick)
+assert(VoidMarkNexusMinimap.parent==Minimap)
+-- Confirmed protected native chrome can be hidden outside combat, but not in it.
+AddonCompartmentFrame=CreateFrame("Button",nil,UIParent)
+AddonCompartmentFrame.IsProtected=function() return true end
+GameTimeFrame.IsProtected=function() return true end
+GameTimeFrame:Show()
+GameTimeTexture=CreateFrame("Texture",nil,GameTimeFrame)
+combat=true
+controller.scripts.OnUpdate(controller,2)
+assert(AddonCompartmentFrame:IsShown() and GameTimeFrame:IsShown())
+combat=false
+event("PLAYER_REGEN_ENABLED")
+assert(not AddonCompartmentFrame:IsShown() and not GameTimeFrame:IsShown())
+assert(not GameTimeTexture:IsShown())
+assert(AddonCompartmentFrame.parent==GameTimeFrame.parent)
+realPrint("PASS: Nexus mouse-loop capture/restore, click preservation, protected native daylight/addon compartment")
 realPrint("PASS: nested duplicate coordinates, late/nested/anonymous zoom, sun/calendar, unrelated icons, combat safety")
 realPrint("PASS: startup, corrupt settings, sparse/late controls, combat deferral, commands, drag, resize/UI scale, options, zoom, reset, screen cap")
 realPrint("PASS: drawer capture/restore, protected and hidden icons, coordinates/failure fallback, saved position recovery")

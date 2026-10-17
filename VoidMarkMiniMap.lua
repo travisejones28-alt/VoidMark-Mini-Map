@@ -132,7 +132,7 @@ end
 local function LayoutDrawer()
     if not drawer then return end
     if InCombatLockdown() or InEditMode() or buttonDragInProgress then pending = true; return end
-    local function Add(button, disableMouseDrag)
+    local function Add(button, disableMouseDrag, nexusMouseDrag)
         if not button or drawerSeen[button] or (button.IsProtected and button:IsProtected()) then return end
         if not button.GetParent or not button.GetNumPoints then return end
         local entry = {button=button, parent=button:GetParent(), scale=button:GetScale(),
@@ -141,7 +141,15 @@ local function LayoutDrawer()
         -- While controlled by the rim, do not allow icon libraries to drag
         -- these buttons back onto the minimap. Restore handlers on release.
         if disableMouseDrag then
-            for _,name in ipairs({"OnDragStart","OnDragStop"}) do
+            local scripts = {"OnDragStart", "OnDragStop"}
+            -- Nexus implements drag with mouse-down + OnUpdate, not OnDragStart.
+            -- Only its confirmed button uses this override; preserve other addons' mouse scripts.
+            if nexusMouseDrag then
+                scripts[#scripts+1]="OnMouseDown"
+                scripts[#scripts+1]="OnMouseUp"
+                scripts[#scripts+1]="OnUpdate"
+            end
+            for _,name in ipairs(scripts) do
                 entry.scripts[#entry.scripts+1]={name,button:GetScript(name)}
                 button:SetScript(name,nil)
             end
@@ -170,9 +178,12 @@ local function LayoutDrawer()
     if lib and lib.GetButtonList and lib.GetMinimapButton then
         local names=lib:GetButtonList()
         table.sort(names)
-        for _,name in ipairs(names) do Add(lib:GetMinimapButton(name),true) end
+        for _,name in ipairs(names) do
+            local button=lib:GetMinimapButton(name)
+            Add(button,true,button==_G.VoidMarkNexusMinimap)
+        end
     end
-    Add(_G.VoidMarkNexusMinimap,true)
+    Add(_G.VoidMarkNexusMinimap,true,true)
     Add(_G.VoidMarkMinimapButton,true)
     local count=0
     for _,control in ipairs(controls) do if control:IsShown() then count=count+1 end end
@@ -271,13 +282,12 @@ end
 local function SuppressNativeChrome()
     if InCombatLockdown() or InEditMode() then pending = true; return end
     local function Hide(frame)
-        if not frame or frame == Minimap or frame == MinimapCluster
-            or (frame.IsProtected and frame:IsProtected()) then return end
+        if not frame or frame == Minimap or frame == MinimapCluster then return end
         if not nativeHidden[frame] then
             nativeHidden[frame] = true
             if frame.HookScript then
                 frame:HookScript("OnShow", function(self)
-                    if not InCombatLockdown() then self:Hide() end
+                    if not InCombatLockdown() and not InEditMode() then self:Hide() end
                 end)
             end
         end
@@ -285,12 +295,14 @@ local function SuppressNativeChrome()
         if frame.SetParent then frame:SetParent(VM.hiddenChrome) end
     end
     for _, name in ipairs({"MinimapZoomIn", "MinimapZoomOut", "MiniMapZoomIn", "MiniMapZoomOut",
-        "GameTimeFrame", "TimeManagerClockButton", "MiniMapCalendarButton", "GameTimeCalendarInvitesTexture",
+        "GameTimeFrame", "GameTimeTexture", "TimeManagerClockButton", "MiniMapCalendarButton",
+        "GameTimeCalendarInvitesTexture", "GameTimeCalendarInvitesGlow", "GameTimeCalendarEventAlarmTexture",
+        "AddonCompartmentFrame",
         "MinimapBorder", "MinimapBorderTop", "MinimapBackdrop", "MinimapZoneTextButton", "MinimapZoneText",
         "MinimapClusterBorderTop"}) do Hide(_G[name]) end
     WalkMinimap(function(frame)
         for _, key in ipairs({"ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
-            "Calendar", "CalendarButton", "GameTimeFrame", "ZoneTextButton", "BorderTop"}) do
+            "Calendar", "CalendarButton", "GameTimeFrame", "GameTimeTexture", "AddonCompartmentFrame", "AddonCompartment", "ZoneTextButton", "BorderTop"}) do
             Hide(frame[key])
         end
         -- Some client versions have anonymous zoom buttons; match their normal

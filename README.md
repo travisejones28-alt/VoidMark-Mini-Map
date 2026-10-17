@@ -64,3 +64,9 @@ Run `lua tests/smoke.lua` from this directory to repeat the behavior test. These
 - Added screenshot regression coverage for late controls, re-show attempts, nested coordinates, unrelated icons and combat deferral. Lua 5.1 syntax and all mocked behavior/conflict scenarios pass. Live Forever rendering still requires an in-game check.
 
 Reference inspection: the available GatherLite and TomTom LibDBIcon copies use the native zoom highlight for addon icons, so highlight-based button detection is deliberately excluded. TomTom's standalone coordinate block belongs to UIParent and is left to its own settings. No changes to those addons are required.
+
+## 0.1.4
+
+- Stop Nexus's mouse-down/OnUpdate circular drag loop while perimeter collection is enabled. Preserve click actions and restore all original mouse/update scripts when collection is disabled.
+- Hide the default addon compartment and the native daylight texture as well as its parent. Confirmed native chrome is handled outside combat even if protected; protected addon icons remain excluded from collection.
+- Regression tests cover Nexus's actual drag mechanism, restoration, clicks, protected native sun/addon controls and combat deferral.
