@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: VoidMark Mini Map
+## Notes: Large square minimap with movable frame and adjustable size for Forever.
+## Author: Taliaa
+## Version: 0.1.1
+## SavedVariablesPerCharacter: VoidMarkMiniMapDB
+
+VoidMarkMiniMap.lua
