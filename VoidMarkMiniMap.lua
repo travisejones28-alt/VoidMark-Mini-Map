@@ -7,6 +7,7 @@ local drawer, drawerToggle, coordinates
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
 local zoomParking
+local nativeZoom = {}
 local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
@@ -108,7 +109,7 @@ end
 local function LayoutControls()
     CollectControls()
     db.size = Size(db.size)
-    holder:SetSize(db.size+8, db.size+36)
+    holder:SetSize(db.size+8, db.size+30)
     mapViewport:SetSize(db.size, db.size)
     local count = 0
     for _, control in ipairs(controls) do
@@ -410,17 +411,26 @@ local function Initialize()
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-26)
     mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
-    -- Park native zoom buttons outside the map; mousewheel zoom still works.
-    zoomParking=CreateFrame("Frame",nil,UIParent)
-    zoomParking:Hide()
-    for _,button in ipairs({MinimapZoomIn,MinimapZoomOut}) do
-        if button and not (button.IsProtected and button:IsProtected()) then
-            button:SetParent(zoomParking)
-            button:ClearAllPoints()
-            button:SetPoint("CENTER",zoomParking,"CENTER")
-            button:Hide()
+    -- Zoom controls in some Forever builds are created later than PLAYER_LOGIN.
+    -- Keep their original parent and scripts intact; hide only confirmed zoom frames.
+    local function SuppressZoomButtons()
+        for _,name in ipairs({"MinimapZoomIn","MinimapZoomOut",
+            "MiniMapZoomIn","MiniMapZoomOut"}) do
+            local button=_G[name]
+            if button and not (button.IsProtected and button:IsProtected()) then
+                if not nativeZoom[button] then
+                    nativeZoom[button]=true
+                    button:Hide()
+                    if button.HookScript then
+                        button:HookScript("OnShow",function(self) self:Hide() end)
+                    end
+                end
+                if button:IsShown() then button:Hide() end
+            end
         end
     end
+    VM.suppressZoom=SuppressZoomButtons
+    SuppressZoomButtons()
     for _, name in ipairs({"MinimapBorder", "MinimapBorderTop", "MinimapBackdrop",
         "MinimapZoneTextButton", "MinimapZoneText", "MinimapZoomIn", "MinimapZoomOut",
         "TimeManagerClockButton", "GameTimeFrame", "MinimapClusterBorderTop"}) do
@@ -465,8 +475,8 @@ local function Initialize()
     holder.stopMoving = StopMoving
     Tooltip(header, "VoidMark Mini Map", "Drag this bar to move the map. /vmm opens settings.")
     zone = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    zone:SetPoint("LEFT", 5, 0)
-    zone:SetPoint("RIGHT", -5, 0)
+    zone:SetPoint("CENTER", header, "CENTER", 0, 0)
+    zone:SetWidth(130)
     zone:SetWordWrap(false)
     local gear = CreateFrame("Button",nil,holder)
     gear:SetSize(22,22)
@@ -476,9 +486,9 @@ local function Initialize()
     gear:SetPoint("TOPRIGHT", -3, -3)
     Tooltip(gear, "VoidMark Mini Map", "Click to adjust map size, lock position, or reset.")
     clock = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    clock:SetPoint("BOTTOMLEFT", 8, 8)
+    clock:SetPoint("RIGHT", header, "RIGHT", -1, 0)
     coordinates=holder:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-    coordinates:SetPoint("BOTTOMRIGHT",-26,8)
+    coordinates:SetPoint("LEFT", header, "LEFT", 5, 0)
     drawer=CreateFrame("Frame","VoidMarkMiniMapDrawer",UIParent,"BackdropTemplate")
     drawer:SetFrameStrata("DIALOG")
     drawer:SetClampedToScreen(true)
@@ -583,5 +593,5 @@ VM:SetScript("OnUpdate", function(_, delta)
     rimElapsed=rimElapsed+delta
     if rimElapsed>=0.2 then rimElapsed=0; RefreshRim() end
     if coordinateElapsed>=0.5 then coordinateElapsed=0; UpdateCoordinates() end
-    if drawerElapsed>=2 then drawerElapsed=0; LayoutDrawer() end
+    if drawerElapsed>=2 then drawerElapsed=0; LayoutDrawer(); if VM.suppressZoom then VM.suppressZoom() end end
 end)
