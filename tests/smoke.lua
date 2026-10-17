@@ -118,6 +118,7 @@ function print(text) messages[#messages+1]=text end
 VoidMarkMiniMapDB={size=0/0,point="garbage",x=math.huge,locked="bad",clock=true}
 if VMM_TEST_SAVED_SETTINGS then VoidMarkMiniMapDB.durability=false end
 assert(loadfile("Footer.lua"))()
+assert(loadfile("Repair.lua"))()
 assert(loadfile("VoidMarkMiniMap.lua"))("VoidMarkMiniMap")
 local controller=frames[5] -- find by PLAYER_LOGIN handler, not frame index
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then controller=frame end end
@@ -519,3 +520,46 @@ assert(fallback.text=="FPS: --","Missing FPS API value did not become unknown")
 GetInventoryItemDurability=nil;event("UPDATE_INVENTORY_DURABILITY")
 assert(durability.text=="Durability: --","Missing durability data must remain unknown")
 realPrint("PASS: footer equipment/repair events, durability toggle, responsive bounds, expansion and missing date/durability")
+-- Hover on the existing durability segment; no additional visible window/button.
+time=function()return 1000000 end
+GetInventoryItemDurability=function(slot)if slot==1 then return 92,100 end end
+GetInventoryItemLink=function(_,slot)if slot==1 then return '|Hitem:100:0|h[Helm]|h' end end
+local repairReads=0
+C_TooltipInfo={GetInventoryItem=function(_,slot)repairReads=repairReads+1;return {repairCost=26157}end}
+GameTooltip=CreateFrame('GameTooltip',nil,UIParent)
+GameTooltip.SetOwner=function(self,owner)self.owner=owner end
+GameTooltip.IsOwned=function(self,owner)return self.owner==owner end
+GameTooltip.SetText=function(self,text)self.text=text;self.lines={}end
+GameTooltip.AddLine=function(self,text)self.lines[#self.lines+1]=text end
+local hover
+for _,f in ipairs(frames)do if f.parent==fallback.parent and f.scripts.OnEnter then hover=f end end
+assert(hover and hover.kind=='Frame','Repair tooltip must reuse the durability footer area')
+assert(controller.registered.MERCHANT_SHOW and controller.registered.MERCHANT_UPDATE)
+hover.scripts.OnEnter(hover)
+assert(GameTooltip.text=='Durability: 92%' and #GameTooltip.lines==1 and GameTooltip.lines[1]=='Repair cost: 2g 61s 57c')
+local previousReads=repairReads
+for i=1,30 do controller.scripts.OnUpdate(controller,.25) end
+assert(repairReads==previousReads,'Unchanged equipment must not poll repair APIs')
+CanMerchantRepair=function()return true end
+GetRepairAllCost=function()return 30000,true end
+event('MERCHANT_SHOW')
+assert(repairReads==previousReads+1,'Opening merchant must read the quote promptly')
+event('MERCHANT_UPDATE');event('MERCHANT_UPDATE')
+controller.scripts.OnUpdate(controller,.01)
+assert(repairReads==previousReads+2,'Merchant update bursts should coalesce to one repair scan')
+assert(#GameTooltip.lines==1 and GameTooltip.lines[1]=='Repair cost: 3g 0s 0c (vendor total)')
+assert(next(VoidMarkMiniMapDB.repairObservations.items),'Vendor per-item observation was not saved')
+C_TooltipInfo.GetInventoryItem=function()return {}end
+event('MERCHANT_CLOSED');controller.scripts.OnUpdate(controller,.01)
+assert(GameTooltip.lines[1]=='Repair cost: ~2g 62s 0c','Merchant close should restore equipment-only estimate')
+-- Another tooltip owner must never be overwritten or hidden by our refresh/leave.
+GameTooltip.owner=UIParent;GameTooltip:SetText('Other addon tooltip')
+event('PLAYER_EQUIPMENT_CHANGED');controller.scripts.OnUpdate(controller,.01)
+assert(GameTooltip.text=='Other addon tooltip')
+hover.scripts.OnLeave(hover);assert(GameTooltip:IsShown())
+hover.scripts.OnEnter(hover);hover.scripts.OnLeave(hover)
+assert(not GameTooltip:IsShown(),'Leaving durability must close its own tooltip')
+VoidMarkMiniMapOptions.durability:SetChecked(false)
+VoidMarkMiniMapOptions.durability.scripts.OnClick(VoidMarkMiniMapOptions.durability)
+assert(not hover:IsShown(),'Disabled durability must remove hover interception')
+realPrint('PASS: compact repair tooltip, no polling, merchant event coalescing, saved estimates and other-tooltip ownership')

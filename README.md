@@ -1,6 +1,6 @@
 # VoidMark Mini Map
 
-Current release: **0.2.0** (Forever Interface **16001**).
+Current release: **0.2.1** (Forever Interface **16001**).
 
 Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
 
@@ -9,7 +9,7 @@ Standalone square minimap for WoW Forever (interface 16001). No VoidMark or ElvU
 
 ## Install
 
-Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC, `Footer.lua`, and `VoidMarkMiniMap.lua` must sit directly inside that folder. Restart WoW after first installation.
+Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC, `Footer.lua`, `Repair.lua`, and `VoidMarkMiniMap.lua` must sit directly inside that folder. Restart WoW after first installation.
 
 ## Controls
 
@@ -36,6 +36,22 @@ This enlarges the actual minimap frame, not the underlying terrain visibility ra
 Run `python tests/run.py` with `lupa==2.8` installed. It compiles addon Lua under stock Lua 5.1, checks the Interface 16001 TOC/load order, tests footer calculations/layout, and runs normal, saved-durability-off, Leatrix and MoveAny startup variants. The existing icon collection, nine-angle Nexus positioning, combat deferral, dragging, sizing, zoom, native chrome suppression and FPS embedding tests remain active. `python tools/package.py --check` verifies the distribution ZIP against source.
 
 The shared four-addon mocked-client integration also passed locally in both Nexus/Mini Map load orders. These tests inspect handlers, calculated bounds and frame attributes; they do not establish actual Forever rendering, protected execution, repair-event delivery or third-party font appearance.
+
+## 0.2.1 repair cost
+
+Hover the existing durability footer segment to see its percentage and one compact line, for example **Repair cost: 2g 61s 57c**. There are no new visible windows, buttons, settings or equipment tables. Disabling or responsively hiding durability also removes its hover area.
+
+- Live equipment prices use `C_TooltipInfo.GetInventoryItem` when it supplies a readable repair cost, with a private hidden tooltip scanner for Classic return values as a fallback. The visible shared GameTooltip is never used for scanning. Fully repaired equipment costs zero; missing, restricted or incomplete prices produce **Repair cost: Unavailable** unless the exact item has a usable saved estimate.
+- Equipment changes and durability events invalidate the result. Merchant opening captures the quote immediately; merchant update bursts are coalesced to one scan per frame. Hover also refreshes it. Repair pricing adds no periodic polling and never performs a repair or intercepts another addon's repair function.
+- At a repair merchant, the live `GetRepairAllCost` result takes precedence and is marked **(vendor total)** because it can include damaged equipment in bags. That aggregate is never used to train equipment estimates. Closing the merchant returns to equipped-item pricing.
+- Valid per-item vendor observations are saved under the existing per-character `VoidMarkMiniMapDB.repairObservations`. The cache stores at most 64 item-identity/durability records, expires them after 30 days, and refines the observed cost per lost durability point. Repeated identical quotes do not add weight. New or changed gear without observations is not assigned a guessed price.
+- Historical estimates are marked `~` and rounded to silver: **Repair cost: ~2g 62s 0c**. Vendor discounts and client rules can change actual prices, so live API prices always override history. There is no history log or bag-price cache. Existing settings and other footer information remain unchanged.
+
+Validation includes 15 repair regression groups for live/fallback APIs, vendor totals, partial data, restricted values, saved cache reload/refinement/limits/expiry, and money formatting. The actual hover/event wiring also verifies no timer polling, merchant-event coalescing, responsive hiding and protection of other tooltip owners. The Interface 16001 TOC loads `Repair.lua` before the main UI.
+
+In game, damage equipment and hover durability; open a repair merchant (also with damaged gear in bags), compare the labeled vendor total, repair, close the vendor and check zero; swap gear and `/reload`; check estimate refinement when live prices are unavailable. Test with ElvUI/Leatrix non-minimap features and any automatic repair addon. Automatic repair can run before this addon's merchant handler, so a pre-repair learning sample is not guaranteed; repair behavior is never delayed or changed. API availability, real merchant events and visual appearance require the actual Classic Forever Beta client.
+
+API references: [Forever tooltip API declaration](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_APIDocumentationGenerated/TooltipInfoDocumentation.lua), [Forever merchant UI](https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_UIPanels_Game/Vanilla/MerchantFrame.lua), and [ElvUI's API usage](https://github.com/tukui-org/ElvUI/blob/main/ElvUI/Game/Shared/Modules/DataTexts/Durability.lua). These are API references; no ElvUI UI or dependency was imported.
 
 ## 0.2.0 footer
 

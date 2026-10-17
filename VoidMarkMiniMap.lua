@@ -4,6 +4,8 @@ local LayoutFooter, UpdateDurability
 local footerIcons, footerSeparators = {}, {}
 local durabilityText, durabilityPercent, clockFull, clockCompact
 local embeddedFPS, footerLayoutKey
+local repair, repairHover, repairPending, merchantOpen
+local ShowDurabilityTooltip, HideDurabilityTooltip
 local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
@@ -496,6 +498,14 @@ LayoutFooter = function()
     for i,e in ipairs(entries) do
         local item=plan.items[i]
         local shown=not not item
+        if e.key=="durability" and repairHover then
+            repairHover:SetShown(shown)
+            if item then
+                repairHover:ClearAllPoints()
+                repairHover:SetPoint("LEFT",footer,"LEFT",item.x,0)
+                repairHover:SetSize(item.width,bottomHeight-2)
+            elseif HideDurabilityTooltip then HideDurabilityTooltip() end
+        end
         e.text:SetShown(shown and not (e.key=="fps" and embeddedFPS))
         if footerIcons[i] then footerIcons[i]:SetShown(shown and not not item.icon) end
         if footerSeparators[i] then footerSeparators[i]:Hide() end
@@ -523,6 +533,21 @@ LayoutFooter = function()
         end
     end
     if embeddedFPS then embeddedFPS:SetShown(not not plan.items[4]) end
+end
+
+HideDurabilityTooltip = function()
+    if not repairHover or not repairHover.hovered then return end
+    repairHover.hovered=false
+    if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(repairHover) then GameTooltip:Hide() end
+end
+ShowDurabilityTooltip = function()
+    if not GameTooltip or not repairHover or not GameTooltip.SetOwner or not GameTooltip.SetText
+        or not GameTooltip.AddLine or not GameTooltip.Show then return end
+    if GameTooltip.IsOwned and not GameTooltip:IsOwned(repairHover) and not repairHover.entering then return end
+    GameTooltip:SetOwner(repairHover,"ANCHOR_TOP")
+    GameTooltip:SetText("Durability: "..(durabilityPercent and string.format("%d%%",math.floor(durabilityPercent+.5)) or "--"))
+    GameTooltip:AddLine(VoidMarkMiniMapRepair.Line(repair and repair.result),1,1,1)
+    GameTooltip:Show()
 end
 
 local function UpdateLabels()
@@ -702,6 +727,8 @@ local function Initialize()
             return
         end
     end
+    repair=VoidMarkMiniMapRepair.New(db)
+    repairPending=true
     holder = CreateFrame("Frame", "VoidMarkMiniMapFrame", UIParent, "BackdropTemplate")
     holder:SetFrameStrata("BACKGROUND")
     holder:SetMovable(true)
@@ -782,6 +809,17 @@ local function Initialize()
     StyleFooterText(fpsText)
     durabilityText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     StyleFooterText(durabilityText)
+    repairHover=CreateFrame("Frame",nil,footer)
+    repairHover:SetFrameLevel(footer:GetFrameLevel()+2)
+    repairHover:EnableMouse(true)
+    repairHover:SetScript("OnEnter",function(self)
+        self.hovered=true;self.entering=true
+        UpdateDurability()
+        repair:Refresh(merchantOpen);repairPending=false
+        ShowDurabilityTooltip();self.entering=false
+    end)
+    repairHover:SetScript("OnLeave",HideDurabilityTooltip)
+    repairHover:SetScript("OnHide",HideDurabilityTooltip)
     local iconPaths={"Interface\\Icons\\INV_Misc_PocketWatch_01","Interface\\Icons\\INV_Misc_Map_01","Interface\\Icons\\INV_Shield_06"}
     for i=1,4 do
         if iconPaths[i] then
@@ -883,9 +921,19 @@ end
 for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
     "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "ADDON_LOADED",
-    "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED"}) do VM:RegisterEvent(event) end
+    "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED", "MERCHANT_SHOW", "MERCHANT_UPDATE"}) do VM:RegisterEvent(event) end
 VM:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "MERCHANT_CLOSED" then
+    if event == "MERCHANT_SHOW" then
+        merchantOpen=true;repairPending=true
+        -- Capture the opening quote promptly, without intercepting auto-repair addons.
+        if ready and repair then
+            repair:Refresh(true);repairPending=false
+            if repairHover and repairHover.hovered then ShowDurabilityTooltip() end
+        end
+    elseif event == "MERCHANT_UPDATE" then if merchantOpen then repairPending=true end
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "MERCHANT_CLOSED" then
+        if event=="MERCHANT_CLOSED" then merchantOpen=false end
+        repairPending=true
         if ready then UpdateDurability() end
     elseif event == "PLAYER_LOGIN" then Initialize()
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -893,7 +941,7 @@ VM:SetScript("OnEvent", function(_, event)
     elseif event == "PLAYER_REGEN_ENABLED" and pending then Initialize()
     elseif event == "PLAYER_ENTERING_WORLD" or event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED"
         or event == "ADDON_LOADED" then
-        if ready then Apply() end
+        if ready then Apply();repairPending=true end
     else UpdateLabels() end
 end)
 local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed, durabilityElapsed = 0,0,0,0,0,0
@@ -901,6 +949,11 @@ VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 1 then elapsed = 0; UpdateLabels() end
     if not ready then return end
+    if repairPending and repair then
+        repairPending=false
+        repair:Refresh(merchantOpen)
+        if repairHover and repairHover.hovered then ShowDurabilityTooltip() end
+    end
     durabilityElapsed=durabilityElapsed+delta
     if durabilityElapsed>=5 then durabilityElapsed=0; if db.durability then UpdateDurability() end end
     fpsElapsed=fpsElapsed+delta
