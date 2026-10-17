@@ -1,6 +1,6 @@
 # VoidMark Mini Map
 
-Current release: **0.2.2** (Forever Interface **16001**).
+Current release: **0.2.3** (Forever Interface **16001**).
 
 Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
 
@@ -36,6 +36,12 @@ This enlarges the actual minimap frame, not the underlying terrain visibility ra
 Run `python tests/run.py` with `lupa==2.8` installed. It compiles addon Lua under stock Lua 5.1, checks the Interface 16001 TOC/load order, tests footer calculations/layout, and runs normal, saved-durability-off, Leatrix and MoveAny startup variants. The existing icon collection, nine-angle Nexus positioning, combat deferral, dragging, sizing, zoom, native chrome suppression and FPS embedding tests remain active. `python tools/package.py --check` verifies the distribution ZIP against source.
 
 The shared four-addon mocked-client integration also passed locally in both Nexus/Mini Map load orders. These tests inspect handlers, calculated bounds and frame attributes; they do not establish actual Forever rendering, protected execution, repair-event delivery or third-party font appearance.
+
+## 0.2.3 server latency
+
+The performance footer now shows **FPS: 56 MS: 38**. `MS` is the world/server latency (fourth return from Forever's `GetNetStats`), not local/home latency. The existing FPS preference now reads **Show FPS / server latency** and controls both without changing its saved value. Latency updates every five seconds; missing, restricted or invalid readings show `MS: --`. The combined performance group participates in the same responsive layout and hides together when space is tight. Existing TaliaaFPS frame integration is retained.
+
+Regression coverage verifies distinct home/server values, invalid and restricted results, five-second sampling, toggle behavior and overlap-free bounds at 180/300/400/600 units. Actual connection readings and appearance still need verification in the Forever Beta client.
 
 ## 0.2.2 working-addon reference review
 

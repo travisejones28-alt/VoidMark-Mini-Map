@@ -37,3 +37,7 @@ Archive SHA-256 values (reference provenance; archives are not redistributed):
 - `ImproveAny-v1.0.23-forever.zip`: `e565e58274da52b534fb3a792f680a3b75bc515ec213247ea8da00008f0933b5`
 
 Validation: all 15 repair and 10 footer regression groups, existing startup/conflict variants, new death/resurrection UI event coverage, shared-addon load-order integration and distribution consistency checks. Real Forever Beta death/resurrection event timing and repair prices still require in-game verification.
+
+## 0.2.3 requested server latency
+
+Added MS alongside FPS, using the fourth GetNetStats result as in the supplied Forever ImproveAny pingframe implementation. The old footer had no latency display. The existing performance setting controls both. Added protected/missing-value handling, slow sampling and combined measured layout, retaining native FPS embedding. Tests cover world vs home latency, restricted/invalid data, sample cadence, toggle behavior and narrow/wide footer bounds. No changes to route, map geometry or repair calculation APIs.

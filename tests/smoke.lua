@@ -584,3 +584,43 @@ assert(GameTooltip.text=='Durability: 100%' and GameTooltip.lines[1]=='Repair co
 hover.scripts.OnLeave(hover)
 realPrint('PASS: explicit death/resurrection repair refresh and repeated-event coalescing')
 realPrint('PASS: compact repair tooltip, no polling, merchant event coalescing, saved estimates and other-tooltip ownership')
+-- Forever's GetNetStats fourth result is world/server latency, not home latency.
+local netCalls=0
+GetNetStats=function()netCalls=netCalls+1;return 1,2,999,38 end
+command('size 600');controller.scripts.OnUpdate(controller,5)
+local latency
+for _,f in ipairs(frames)do if f.kind=='FontString' and f.parent==fallback.parent and f.text=='MS: 38' then latency=f end end
+assert(latency and latency:IsShown(),'Footer must show server latency beside FPS')
+local previousNetCalls=netCalls
+controller.scripts.OnUpdate(controller,.25)
+assert(netCalls==previousNetCalls,'Server latency must not be sampled at FPS frequency')
+VoidMarkMiniMapOptions.fps:SetChecked(false)
+VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
+assert(not latency:IsShown(),'Performance toggle must also hide server latency')
+VoidMarkMiniMapOptions.fps:SetChecked(true)
+VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
+assert(latency:IsShown())
+local secret={};issecretvalue=function(v)return v==secret end
+for _,fn in ipairs({function()return 1,2,38,nil end,function()error('Network stats unavailable')end,
+ function()return 1,2,38,0/0 end,function()return 1,2,38,-1 end,function()return 1,2,38,secret end})do
+ GetNetStats=fn;controller.scripts.OnUpdate(controller,5)
+ assert(latency.text=='MS: --','Invalid server stats must remain unknown, not use home latency')
+end
+issecretvalue=nil
+GetNetStats=function()return 1,2,10,12345 end
+for _,size in ipairs({180,300,400,600})do
+ command('size '..size);controller.scripts.OnUpdate(controller,5)
+ local ranges={}
+ if TaliaaFPSFrame and TaliaaFPSFrame:IsShown() then
+  local x=TaliaaFPSFrame.point[4];ranges[#ranges+1]={x,x+TaliaaFPSFrame.width}
+ end
+ for _,f in ipairs(frames)do
+  if f.kind=='FontString' and f.parent==fallback.parent and f:IsShown() and f.point and f.point[1]=='LEFT' then
+   local x=f.point[4];assert(x>=0 and x+f.width<=size,'Server stats escaped footer width')
+   ranges[#ranges+1]={x,x+f.width}
+  end
+ end
+ table.sort(ranges,function(a,b)return a[1]<b[1]end)
+ for i=2,#ranges do assert(ranges[i][1]>=ranges[i-1][2],'Server stats overlap another footer item')end
+end
+realPrint('PASS: Forever world/server latency, five-second sampling, performance toggle, missing/restricted stats and resize bounds')

@@ -10,7 +10,7 @@ local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
-local drawer, drawerToggle, coordinates, footer, fpsText
+local drawer, drawerToggle, coordinates, footer, fpsText, latencyText
 local topHeight, bottomHeight = 2, 32
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
@@ -423,8 +423,27 @@ local function LayoutFPS()
     if LayoutFooter then LayoutFooter() end
 end
 
+local function UpdateLatency()
+    if not latencyText then return end
+    local ok,ms=pcall(function()
+        if type(GetNetStats)~="function" then return end
+        local _,_,_,world=GetNetStats()
+        if issecretvalue and issecretvalue(world) then return end
+        local value=Number(world,nil)
+        return value and value>=0 and value or nil
+    end)
+    ms=ok and ms or nil
+    latencyText:SetText(ms and string.format("MS: %d",math.floor(ms+.5)) or "MS: --")
+    if not ms then latencyText:SetTextColor(.65,.65,.72)
+    elseif ms<100 then latencyText:SetTextColor(.3,.95,.45)
+    elseif ms<=200 then latencyText:SetTextColor(1,.82,.2)
+    else latencyText:SetTextColor(1,.28,.28) end
+    if LayoutFooter then LayoutFooter() end
+end
+
 local function UpdateFPS()
     if not fpsText then return end
+    if latencyText and not latencyText:GetText() then UpdateLatency() end
     local ok,fps=pcall(function() return GetFramerate and GetFramerate() end)
     local readable,value=pcall(function()
         if not ok or (issecretvalue and issecretvalue(fps)) then return end
@@ -463,7 +482,7 @@ LayoutFooter = function()
             end
         end
     end
-    local signature={tostring(db.size),tostring(embeddedFPS)}
+    local signature={tostring(db.size),tostring(embeddedFPS),latencyText:GetText() or ""}
     for _,e in ipairs(entries) do
         e.full=e.full or e.text:GetText() or ""
         signature[#signature+1]=tostring(e.enabled)..":"..e.full
@@ -493,7 +512,15 @@ LayoutFooter = function()
             e.width=math.max(e.width,widest);e.compactWidth=e.width
         end
     end
+    local font=latencyText:GetFont()
+    if font then latencyText:SetFont(font,size,"OUTLINE") end
+    latencyText:SetWidth(0);latencyText:SetWordWrap(false)
+    local latencyWidth=latencyText:GetStringWidth()
+    local fpsWidth=entries[4].width
+    entries[4].width=fpsWidth+6+latencyWidth
+    entries[4].compactWidth=entries[4].width
     local plan=Footer.Plan(db.size,entries)
+    latencyText:SetShown(not not plan.items[4])
     local previous
     for i,e in ipairs(entries) do
         local item=plan.items[i]
@@ -522,12 +549,18 @@ LayoutFooter = function()
                 footerSeparators[i]:SetPoint("CENTER",footer,"LEFT",item.x-8,0);footerSeparators[i]:Show()
             end
             previous=i
+            if e.key=="fps" then
+                e.text:SetWidth(fpsWidth)
+                latencyText:ClearAllPoints()
+                latencyText:SetPoint("LEFT",footer,"LEFT",item.x+fpsWidth+6,0)
+                latencyText:SetWidth(latencyWidth)
+            end
             if e.key=="fps" and embeddedFPS then
                 embeddedFPS:ClearAllPoints();embeddedFPS:SetPoint("LEFT",footer,"LEFT",item.x,0)
-                embeddedFPS:SetSize(item.width,bottomHeight-2)
+                embeddedFPS:SetSize(fpsWidth,bottomHeight-2)
                 for _,region in ipairs(fpsRegions) do
                     region:ClearAllPoints();region:SetPoint("CENTER",embeddedFPS,"CENTER",0,0)
-                    region:SetWidth(item.width);region:SetWordWrap(false)
+                    region:SetWidth(fpsWidth);region:SetWordWrap(false)
                 end
             end
         end
@@ -682,7 +715,7 @@ local function ToggleOptions()
         options.purple = Check("Colored border", -185, "purple")
         options.coordinates = Check("Show player coordinates", -217, "coordinates")
         options.drawer = Check("Place addon buttons around map", -249, "drawer")
-        options.fps = Check("Show FPS", -281, "fps")
+        options.fps = Check("Show FPS / server latency", -281, "fps")
         options.localClock = Check("Show local clock", -313, "localClock")
         options.clock24 = Check("Use 24-hour time (off: 12-hour AM/PM)", -345, "clock24")
         options.durability = Check("Show equipment durability", -377, "durability")
@@ -807,6 +840,8 @@ local function Initialize()
     fpsText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     fpsText:SetPoint("RIGHT",footer,"RIGHT",-9,0)
     StyleFooterText(fpsText)
+    latencyText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    StyleFooterText(latencyText)
     durabilityText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     StyleFooterText(durabilityText)
     repairHover=CreateFrame("Frame",nil,footer)
@@ -945,7 +980,7 @@ VM:SetScript("OnEvent", function(_, event)
         if ready then Apply();repairPending=true end
     else UpdateLabels() end
 end)
-local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed, durabilityElapsed = 0,0,0,0,0,0
+local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed, durabilityElapsed, latencyElapsed = 0,0,0,0,0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 1 then elapsed = 0; UpdateLabels() end
@@ -957,6 +992,8 @@ VM:SetScript("OnUpdate", function(_, delta)
     end
     durabilityElapsed=durabilityElapsed+delta
     if durabilityElapsed>=5 then durabilityElapsed=0; if db.durability then UpdateDurability() end end
+    latencyElapsed=latencyElapsed+delta
+    if latencyElapsed>=5 then latencyElapsed=0; if db.fps then UpdateLatency() end end
     fpsElapsed=fpsElapsed+delta
     if fpsElapsed>=0.25 then fpsElapsed=0; UpdateFPS() end
     coordinateElapsed=coordinateElapsed+delta
