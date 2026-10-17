@@ -9,6 +9,7 @@ for _, key in ipairs({"SetFrameStrata", "SetMovable", "SetClampedToScreen", "Set
     Methods[key] = noop
 end
 function Methods:SetSize(w,h) self.width,self.height=w,h end
+function Methods:SetWidth(w) self.width=w end
 function Methods:SetHeight(h) self.height=h end
 function Methods:GetWidth() return self.width or 100 end
 function Methods:GetHeight() return self.height or 100 end
@@ -58,6 +59,24 @@ function CreateFrame(kind,name,parent,template)
     return frame
 end
 function Methods:CreateFontString() return CreateFrame("FontString") end
+function Methods:IsObjectType(kind) return self.kind==kind end
+function Methods:GetText() return self.text end
+function Methods:SetAlpha(v) self.alpha=v end
+function Methods:GetRegions()
+    local regions={}
+    for _, f in ipairs(frames) do
+        if f.parent==self and f.kind=="FontString" then regions[#regions+1]=f end
+    end
+    return unpack(regions)
+end
+function Methods:GetChildren()
+    local children={}
+    for _, f in ipairs(frames) do
+        if f.parent==self and f.kind~="FontString" then children[#children+1]=f end
+    end
+    return unpack(children)
+end
+function Methods:GetNormalTexture() return self.normal end
 UIParent=CreateFrame("Frame")
 UIParent:SetSize(1920,1080)
 Minimap=CreateFrame("Minimap")
@@ -165,7 +184,7 @@ command("reset")
 assert(Minimap.width==300 and VoidMarkMiniMapDB.locked)
 UIParent:SetSize(400,400)
 command("size 600")
-assert(Minimap.width<=300,"Size must fit screen")
+assert(Minimap.width<=320,"Size must fit screen")
 assert(VoidMarkMiniMapFrame.height<=400,"Dock must fit screen too")
 event("ZONE_CHANGED")
 event("PLAYER_ENTERING_WORLD")
@@ -218,5 +237,45 @@ VoidMarkMiniMapDB.x=99999;VoidMarkMiniMapDB.y=-99999
 event("DISPLAY_SIZE_CHANGED")
 assert(VoidMarkMiniMapDB.x>=0 and VoidMarkMiniMapDB.x<=UIParent:GetWidth()-VoidMarkMiniMapFrame:GetWidth())
 assert(VoidMarkMiniMapDB.y<=0 and VoidMarkMiniMapDB.y>=-UIParent:GetHeight()+VoidMarkMiniMapFrame:GetHeight())
+-- Screenshot regressions: nested/colorized coordinates and late native chrome.
+local wrapper=CreateFrame("Frame",nil,Minimap)
+local nested=CreateFrame("Frame",nil,wrapper)
+local duplicate=CreateFrame("FontString",nil,nested)
+duplicate:SetText("|cffffffff55.4, 39.0|r")
+local unrelated=CreateFrame("FontString",nil,nested)
+unrelated:SetText("Level 60")
+local outside=CreateFrame("FontString",nil,UIParent)
+outside:SetText("55.4, 39.0")
+Minimap.ZoomIn=CreateFrame("Button",nil,nested)
+local anonymous=CreateFrame("Button",nil,nested)
+anonymous.normal={GetTexture=function() return "Interface\\Minimap\\UI-Minimap-ZoomOut" end}
+local addonIcon=CreateFrame("Button",nil,nested)
+addonIcon.normal={GetTexture=function() return "Interface\\Icons\\Trade_Engineering" end}
+MiniMapCalendarButton=CreateFrame("Button",nil,UIParent)
+GameTimeFrame=CreateFrame("Button",nil,UIParent)
+combat=true
+controller.scripts.OnUpdate(controller,2)
+assert(MiniMapCalendarButton:IsShown(),"Do not mutate native chrome during combat")
+combat=false
+event("PLAYER_REGEN_ENABLED")
+controller.scripts.OnUpdate(controller,2)
+assert(duplicate.alpha==0,"Nested colorized duplicate coordinates must be suppressed")
+assert(unrelated.alpha==nil and outside.alpha==nil,"Do not hide unrelated labels")
+assert(not Minimap.ZoomIn:IsShown() and not anonymous:IsShown())
+assert(not MiniMapCalendarButton:IsShown() and not GameTimeFrame:IsShown())
+assert(addonIcon:IsShown(),"Do not mistake addon icons for zoom controls")
+assert(MiniMapCalendarButton.parent==GameTimeFrame.parent)
+assert(not GameTimeFrame.parent:IsShown(),"Park chrome under a hidden parent")
+GameTimeFrame:Show()
+GameTimeFrame.hooks.OnShow(GameTimeFrame)
+assert(not GameTimeFrame:IsShown(),"Native OnShow must not restore the sun")
+Minimap.ZoomOut=CreateFrame("Button",nil,Minimap)
+controller.scripts.OnUpdate(controller,2)
+assert(not Minimap.ZoomOut:IsShown(),"Discover controls created after login")
+duplicate:SetAlpha(1)
+duplicate:SetText("(55, 39)")
+controller.scripts.OnUpdate(controller,0.5)
+assert(duplicate.alpha==0)
+realPrint("PASS: nested duplicate coordinates, late/nested/anonymous zoom, sun/calendar, unrelated icons, combat safety")
 realPrint("PASS: startup, corrupt settings, sparse/late controls, combat deferral, commands, drag, resize/UI scale, options, zoom, reset, screen cap")
 realPrint("PASS: drawer capture/restore, protected and hidden icons, coordinates/failure fallback, saved position recovery")

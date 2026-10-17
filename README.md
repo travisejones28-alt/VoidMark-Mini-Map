@@ -16,11 +16,11 @@ Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC and Lua file mus
 - `/vmm reset`: restore the default 300-unit map and top-right position.
 - Mouse wheel over the map: zoom. Normal map clicks remain Blizzard's.
 - Gear button: settings. Settings include size, lock, clock, and purple border.
-- `Addons` button: opens the supported addon-icon drawer; Escape closes it. Disable collection in settings to restore each button's original parent, position, scale and drag handlers. Protected buttons are not collected.
+- Supported addon icons stay around the perimeter. Disable collection in settings to restore each button's original parent, position, scale and drag handlers. Protected buttons are not collected.
 - Optional player coordinates update twice a second and show `--, --` when unavailable (such as some instances). No world-map selection is changed.
 - Border presets: purple, cyan, and amber, with an option for a neutral gray border.
 
-Position and settings are saved separately for each character. Layout changes requested in combat are applied after combat, with a status message in settings. Tracking, mail, calendar and queue controls are retained where available, placed in a compact dock below the terrain, and sized to fit. Controls loaded by other Blizzard modules are collected after those modules load. LibDBIcon addons are notified of the square shape. Other minimap replacements (such as SexyMap or ElvUI's minimap) should be disabled; VoidMark Mini Map pauses when one is detected.
+Position and settings are saved separately for each character. Layout changes requested in combat are applied after combat, with a status message in settings. Tracking, mail and queue controls are retained where available, placed around the perimeter, and sized to fit. Native zoom, sun and calendar controls are hidden; mouse-wheel zoom remains available. Controls loaded by other Blizzard modules are collected after those modules load. LibDBIcon addons are notified of the square shape. Other minimap replacements (such as SexyMap or ElvUI's minimap) should be disabled; VoidMark Mini Map pauses when one is detected.
 
 The drawer supports LibDBIcon buttons plus the named VoidMark and VoidMark Nexus buttons. It does not indiscriminately move every minimap child. Addon visibility preferences are respected, and layout changes wait until combat ends. Disable Leatrix Plus **Enhance minimap** and MoveAny **Minimap** movement before testing; other features in those addons can remain enabled. Either active minimap feature is detected at startup and causes VoidMark Mini Map to pause its styling. These combinations still need in-game testing. Saved positions are clamped to the current screen on layout changes.
 
@@ -51,7 +51,16 @@ Run `lua tests/smoke.lua` from this directory to repeat the behavior test. These
 ### In-game test
 
 1. Open `/vmm`, unlock, move and resize the map, then lock it.
-2. Open `Addons`; test left/right clicks on your supported icons. Toggle collection off and back on.
+2. Test left/right clicks on supported perimeter icons. Toggle collection off and back on.
 3. Enable coordinates and walk around. Enter an instance if convenient.
 4. Change size during combat and confirm it applies afterward.
 5. `/reload` and confirm size, position and settings persist.
+
+## 0.1.3
+
+- Suppress global, nested and anonymous native zoom controls, including controls created after login. Match anonymous buttons by normal zoom texture, never the highlight texture shared by LibDBIcon addons.
+- Keep native sun/calendar controls under a hidden parent and recheck after loading modules and periodically outside combat/Edit Mode.
+- Find duplicate coordinates through nested minimap/cluster/backdrop frames, including colorized text and integer coordinates. Preserve the VoidMark header coordinates and unrelated labels/windows.
+- Added screenshot regression coverage for late controls, re-show attempts, nested coordinates, unrelated icons and combat deferral. Lua 5.1 syntax and all mocked behavior/conflict scenarios pass. Live Forever rendering still requires an in-game check.
+
+Reference inspection: the available GatherLite and TomTom LibDBIcon copies use the native zoom highlight for addon icons, so highlight-based button detection is deliberately excluded. TomTom's standalone coordinate block belongs to UIParent and is left to its own settings. No changes to those addons are required.

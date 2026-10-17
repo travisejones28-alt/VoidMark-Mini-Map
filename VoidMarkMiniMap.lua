@@ -6,8 +6,7 @@ local controls, seenControls = {}, {}
 local drawer, drawerToggle, coordinates
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
-local zoomParking
-local nativeZoom = {}
+local nativeHidden = {}
 local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
@@ -96,7 +95,6 @@ local function CollectControls()
     Add(MiniMapTracking)
     Add(MiniMapTrackingButton)
     Add(MiniMapMailFrame)
-    Add(MiniMapCalendarButton)
     Add(MiniMapWorldMapButton)
     -- GameTimeFrame is the native day/night icon; leave it hidden rather than
     -- displaying a second independent clock beside the minimap.
@@ -106,7 +104,6 @@ local function CollectControls()
     if MinimapCluster then
         Add(MinimapCluster.Tracking)
         Add(MinimapCluster.TrackingButton)
-        Add(MinimapCluster.Calendar)
         Add(MinimapCluster.MailFrame)
         Add(MinimapCluster.InstanceDifficulty)
     end
@@ -234,28 +231,79 @@ local function RecoverPosition()
     db.point,db.x,db.y="TOPLEFT",x,top-height
 end
 
--- Some Forever layouts expose a second coordinate FontString on the native
--- minimap/cluster. Hide only duplicate coordinate text, not unrelated regions.
+-- Scan only minimap-owned trees, never UIParent or arbitrary addon windows.
+local function WalkMinimap(visit)
+    local seen = {}
+    local function Walk(frame, depth)
+        if not frame or seen[frame] or depth > 8 then return end
+        seen[frame] = true
+        visit(frame)
+        if frame.GetChildren then
+            for _, child in ipairs({frame:GetChildren()}) do Walk(child, depth+1) end
+        end
+    end
+    Walk(Minimap, 0)
+    Walk(MinimapCluster, 0)
+    Walk(MinimapBackdrop, 0)
+end
+
 local function SuppressNativeCoordinates()
-    local function Inspect(frame)
-        if not frame or not frame.GetRegions then return end
-        local regions={frame:GetRegions()}
-        for _,region in ipairs(regions) do
-            if region and region.IsObjectType and region:IsObjectType("FontString")
-                and region ~= coordinates and region.GetText then
-                local value=region:GetText()
-                if type(value)=="string" and value:match("^%s*%d+%.%d+%s*,%s*%d+%.%d+%s*$") then
-                    region:SetAlpha(0)
+    WalkMinimap(function(frame)
+        if not frame.GetRegions then return end
+        for _, region in ipairs({frame:GetRegions()}) do
+            if region ~= coordinates and region.IsObjectType and region:IsObjectType("FontString")
+                and region.GetText then
+                local value = region:GetText()
+                if not (issecretvalue and issecretvalue(value)) and type(value) == "string" then
+                    -- Color codes, integer coordinates and optional parentheses occur in addons.
+                    value = value:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                    if value:match("^%s*%(?%s*%d+%.?%d*%s*[,/]%s*%d+%.?%d*%s*%)?%s*$") then
+                        region:SetAlpha(0)
+                    end
                 end
             end
         end
+    end)
+end
+
+-- Keep confirmed native chrome under a hidden parent. OnShow alone cannot stop
+-- another layout from restoring alpha/anchors or creating controls after login.
+local function SuppressNativeChrome()
+    if InCombatLockdown() or InEditMode() then pending = true; return end
+    local function Hide(frame)
+        if not frame or frame == Minimap or frame == MinimapCluster
+            or (frame.IsProtected and frame:IsProtected()) then return end
+        if not nativeHidden[frame] then
+            nativeHidden[frame] = true
+            if frame.HookScript then
+                frame:HookScript("OnShow", function(self)
+                    if not InCombatLockdown() then self:Hide() end
+                end)
+            end
+        end
+        frame:Hide()
+        if frame.SetParent then frame:SetParent(VM.hiddenChrome) end
     end
-    Inspect(Minimap)
-    Inspect(MinimapCluster)
-    if Minimap and Minimap.GetChildren then
-        local children={Minimap:GetChildren()}
-        for _,child in ipairs(children) do Inspect(child) end
-    end
+    for _, name in ipairs({"MinimapZoomIn", "MinimapZoomOut", "MiniMapZoomIn", "MiniMapZoomOut",
+        "GameTimeFrame", "TimeManagerClockButton", "MiniMapCalendarButton", "GameTimeCalendarInvitesTexture",
+        "MinimapBorder", "MinimapBorderTop", "MinimapBackdrop", "MinimapZoneTextButton", "MinimapZoneText",
+        "MinimapClusterBorderTop"}) do Hide(_G[name]) end
+    WalkMinimap(function(frame)
+        for _, key in ipairs({"ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
+            "Calendar", "CalendarButton", "GameTimeFrame", "ZoneTextButton", "BorderTop"}) do
+            Hide(frame[key])
+        end
+        -- Some client versions have anonymous zoom buttons; match their normal
+        -- texture only. Addon icons commonly share the zoom HIGHLIGHT texture.
+        if frame.GetNormalTexture then
+            local texture = frame:GetNormalTexture()
+            local path = texture and texture.GetTexture and texture:GetTexture()
+            if type(path) == "string" then
+                path = path:lower():gsub("/", "\\")
+                if (path:match("ui%-minimap%-zoomin$") or path:match("ui%-minimap%-zoomout$")) then Hide(frame) end
+            end
+        end
+    end)
 end
 
 local function UpdateCoordinates()
@@ -311,6 +359,8 @@ local function Apply()
     if applying then return end
     applying = true
     db.size = Size(db.size)
+    SuppressNativeChrome()
+    SuppressNativeCoordinates()
     LayoutControls()
     RecoverPosition()
     holder:ClearAllPoints()
@@ -441,46 +491,9 @@ local function Initialize()
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-26)
     mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
-    -- Zoom controls in some Forever builds are created later than PLAYER_LOGIN.
-    -- Keep their original parent and scripts intact; hide only confirmed zoom frames.
-    local function SuppressZoomButtons()
-        for _,name in ipairs({"MinimapZoomIn","MinimapZoomOut",
-            "MiniMapZoomIn","MiniMapZoomOut"}) do
-            local button=_G[name]
-            if button and not (button.IsProtected and button:IsProtected()) then
-                if not nativeZoom[button] then
-                    nativeZoom[button]=true
-                    button:Hide()
-                    if button.HookScript then
-                        button:HookScript("OnShow",function(self) self:Hide() end)
-                    end
-                end
-                if button:IsShown() then button:Hide() end
-            end
-        end
-    end
-    VM.suppressZoom=SuppressZoomButtons
-    SuppressZoomButtons()
-    for _, name in ipairs({"MinimapBorder", "MinimapBorderTop", "MinimapBackdrop",
-        "MinimapZoneTextButton", "MinimapZoneText", "MinimapZoomIn", "MinimapZoomOut",
-        "TimeManagerClockButton", "GameTimeFrame", "MinimapClusterBorderTop"}) do
-        local object = _G[name]
-        if object then
-            object:Hide()
-            if object.HookScript then object:HookScript("OnShow", function(self) self:Hide() end) end
-        end
-    end
-    -- Newer clients expose the zone header as children of MinimapCluster.
-    -- Hide both generations; do not hide the cluster itself (Edit Mode owns it).
-    if MinimapCluster then
-        for _, object in ipairs({MinimapCluster.ZoneTextButton,
-            MinimapCluster.BorderTop}) do
-            if object then
-                object:Hide()
-                if object.HookScript then object:HookScript("OnShow",function(self) self:Hide() end) end
-            end
-        end
-    end
+    VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
+    VM.hiddenChrome:Hide()
+    SuppressNativeChrome()
     header = CreateFrame("Frame", nil, holder)
     header:SetPoint("TOPLEFT", 4, -3)
     header:SetPoint("TOPRIGHT", -28, -3)
@@ -623,6 +636,10 @@ VM:SetScript("OnUpdate", function(_, delta)
     rimElapsed=rimElapsed+delta
     if rimElapsed>=0.2 then rimElapsed=0; RefreshRim() end
     if coordinateElapsed>=0.5 then coordinateElapsed=0; UpdateCoordinates() end
-    if drawerElapsed>=2 then drawerElapsed=0; LayoutDrawer(); if VM.suppressZoom then VM.suppressZoom() end end
+    if drawerElapsed>=2 then
+        drawerElapsed=0
+        if InCombatLockdown() or InEditMode() then pending=true
+        else SuppressNativeChrome(); LayoutControls(); LayoutDrawer() end
+    end
     if coordinateElapsed==0 then SuppressNativeCoordinates() end
 end)
