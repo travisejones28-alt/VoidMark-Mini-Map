@@ -4,7 +4,7 @@ local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, do
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
 local drawer, drawerToggle, coordinates, footer, fpsText
-local topHeight, bottomHeight = 26, 24
+local topHeight, bottomHeight = 2, 24
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
 local nativeHidden = {}
@@ -12,7 +12,7 @@ local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
-local defaults = { size = 300, locked = true, clock = true, fps = true, purple = true,
+local defaults = { size = 300, locked = true, clock = true, localClock = false, fps = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -79,7 +79,7 @@ local function RimPoint(index)
     local perSide = math.max(1, math.floor((db.size - 40) / step))
     local side = math.floor(index / perSide) % 4
     local offset = 24 + (index % perSide) * step
-    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 16, -26-offset end
+    if side == 0 then return "TOPRIGHT", holder, "TOPRIGHT", 16, -(topHeight+2)-offset end
     if side == 1 then return "BOTTOMRIGHT", holder, "BOTTOMRIGHT", -offset, -14 end
     if side == 2 then return "BOTTOMLEFT", holder, "BOTTOMLEFT", -14, 25+offset end
     return "TOPLEFT", holder, "TOPLEFT", offset, 14
@@ -353,7 +353,12 @@ end
 
 local function UpdateCoordinates()
     if not coordinates then return end
-    coordinates:SetShown(db.coordinates and db.size>=260)
+    local left = db.clock and db.localClock and 180 or ((db.clock or db.localClock) and 88 or 8)
+    local right = db.fps and 98 or 8
+    local available = db.size-left-right
+    coordinates:SetShown(db.coordinates and db.size>=260 and available>=90)
+    coordinates:ClearAllPoints()
+    coordinates:SetPoint("CENTER",footer,"LEFT",left+available/2,0)
     if not db.coordinates then return end
     local text="--, --"
     -- Instances and restricted map data must not cause errors or disturb the world map.
@@ -418,11 +423,16 @@ end
 local function UpdateLabels()
     if not ready then return end
     zone:SetText(GetMinimapZoneText() or "")
+    local times={}
     if db.clock then
         local hour, minute = GetGameTime()
-        clock:SetText(string.format("%02d:%02d", hour, minute))
-        clock:Show()
-    else clock:Hide() end
+        times[#times+1]=string.format("S %02d:%02d",hour,minute)
+    end
+    if db.localClock then
+        times[#times+1]="L "..(date and date("%H:%M") or "--:--")
+    end
+    clock:SetText(table.concat(times,"  "))
+    clock:SetShown(#times>0)
 end
 
 local function UpdateOptions()
@@ -432,6 +442,7 @@ local function UpdateOptions()
     options.sizeText:SetText("Map size: " .. db.size)
     lockButton:SetText(db.locked and "Unlock position" or "Lock position")
     options.clock:SetChecked(db.clock)
+    options.localClock:SetChecked(db.localClock)
     options.fps:SetChecked(db.fps)
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
@@ -488,7 +499,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 422)
+        options:SetSize(390, 454)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -531,14 +542,15 @@ local function ToggleOptions()
         options.coordinates = Check("Show player coordinates", -217, "coordinates")
         options.drawer = Check("Place addon buttons around map", -249, "drawer")
         options.fps = Check("Show FPS", -281, "fps")
+        options.localClock = Check("Show local clock", -313, "localClock")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
-        options.accent:SetPoint("TOPLEFT",22,-322)
+        options.accent:SetPoint("TOPLEFT",22,-354)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-354)
-        compatibility:SetPoint("TOPRIGHT",-22,-354)
+        compatibility:SetPoint("TOPLEFT",22,-386)
+        compatibility:SetPoint("TOPRIGHT",-22,-386)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
@@ -581,15 +593,16 @@ local function Initialize()
     Minimap:SetScale(1)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
     mapViewport = CreateFrame("Frame",nil,holder)
-    mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-26)
+    mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-(topHeight+2))
     mapViewport:SetSize(db.size,db.size)
     _G.GetMinimapShape = function() return "SQUARE" end
     VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
     VM.hiddenChrome:Hide()
     SuppressNativeChrome()
     header = CreateFrame("Frame", nil, holder)
-    header:SetPoint("TOPLEFT", 4, -3)
-    header:SetPoint("TOPRIGHT", -4, -3)
+    header:SetPoint("TOPLEFT",mapViewport,"TOPLEFT",0,0)
+    header:SetPoint("TOPRIGHT",mapViewport,"TOPRIGHT",0,0)
+    header:SetFrameLevel(holder:GetFrameLevel()+5)
     header:SetHeight(22)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
@@ -612,11 +625,13 @@ local function Initialize()
     Tooltip(header, "VoidMark Mini Map", "Drag this bar to move the map. /vmm opens settings.")
     zone = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     zone:SetPoint("CENTER", header, "CENTER", 0, 0)
+    StyleFooterText(zone)
     zone:SetTextColor(0.88,0.81,0.98)
     zone:SetWidth(130)
     zone:SetWordWrap(false)
     local gear = CreateFrame("Button",nil,holder)
     gear:SetSize(22,22)
+    gear:SetFrameLevel(holder:GetFrameLevel()+7)
     local gearLabel=gear:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     gearLabel:SetPoint("CENTER",0,2)
     gearLabel:SetText("...")
@@ -742,7 +757,7 @@ end)
 local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed = 0,0,0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
-    if elapsed >= 10 then elapsed = 0; UpdateLabels() end
+    if elapsed >= 1 then elapsed = 0; UpdateLabels() end
     if not ready then return end
     fpsElapsed=fpsElapsed+delta
     if fpsElapsed>=0.25 then fpsElapsed=0; UpdateFPS() end

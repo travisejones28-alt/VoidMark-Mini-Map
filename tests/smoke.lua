@@ -374,7 +374,7 @@ assert(TaliaaFPSFrame.parent==fallback.parent,"Embed native FPS frame in footer"
 assert(TaliaaFPSFrame:GetScript("OnUpdate")==update)
 assert(not TaliaaFPSFrame.mouse and not fallback:IsShown())
 assert(TaliaaFPSDB.scale==1.4 and TaliaaFPSDB.x==-20,"Do not overwrite standalone settings")
-assert(VoidMarkMiniMapFrame.height==Minimap.height+54,"Reserve footer space outside terrain")
+assert(VoidMarkMiniMapFrame.height==Minimap.height+30,"Reserve footer space outside terrain")
 assert(fallback.fontSize==14 and fallback.fontFlags=="OUTLINE","Footer must use readable outlined text")
 assert(VoidMarkMiniMapOptions.fps:GetChecked(),"Show FPS defaults on")
 VoidMarkMiniMapOptions.fps:SetChecked(false)
@@ -395,6 +395,25 @@ VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
 assert(fallback:IsShown())
 TaliaaFPSFrame=embedded
 controller.scripts.OnUpdate(controller,2)
+date=function(format) assert(format=="%H:%M"); return "16:25" end
+local function checkClock(server,localTime,expected)
+    VoidMarkMiniMapOptions.clock:SetChecked(server)
+    VoidMarkMiniMapOptions.clock.scripts.OnClick(VoidMarkMiniMapOptions.clock)
+    VoidMarkMiniMapOptions.localClock:SetChecked(localTime)
+    VoidMarkMiniMapOptions.localClock.scripts.OnClick(VoidMarkMiniMapOptions.localClock)
+    local found
+    for _,f in ipairs(frames) do
+        if f.kind=="FontString" and f.parent==fallback.parent and f.text==expected then found=f end
+    end
+    assert(found,"Missing expected clock text: "..expected)
+    assert(found:IsShown()==(server or localTime))
+end
+checkClock(true,false,"S 22:45")
+checkClock(false,true,"L 16:25")
+checkClock(true,true,"S 22:45  L 16:25")
+checkClock(false,false,"")
+checkClock(true,false,"S 22:45")
+realPrint("PASS: server/local/both/neither clock choices and compact overlay header geometry")
 realPrint("PASS: FPS setting hides/restores embedded and fallback counters; larger outlined footer")
 realPrint("PASS: FPS fallback, live TaliaaFPS embedding, saved settings, footer geometry")
 realPrint("PASS: saved collection-off Nexus square geometry at nine angles, combat recovery, Forever DielFrame")

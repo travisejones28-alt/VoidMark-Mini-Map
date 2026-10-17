@@ -88,3 +88,9 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 - Added a saved **Show FPS** checkbox in `/vmm`; it controls both embedded TaliaaFPS and the fallback counter.
 - Increased footer text to 14 pixels with a white fill, black outline and shadow for better readability. Widened the FPS slot and suppress center coordinates on maps below 260 units to avoid crowding.
 - Tests cover toggling both FPS paths and periodic layout respecting the saved setting.
+
+## 0.1.8
+
+- Removed the black header strip; the outlined zone name now sits directly over the terrain, with the settings button at the upper right. The zone area still supports dragging while unlocked.
+- Added independent server and local clock toggles in `/vmm`. Enable either, both, or neither; `S` identifies server time and `L` identifies the computer's local time. Existing server-clock preference is preserved.
+- Clock labels refresh each second. Footer coordinates move into available space and hide if both clocks plus FPS would crowd them on smaller maps.
