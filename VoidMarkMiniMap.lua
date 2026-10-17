@@ -30,7 +30,9 @@ end
 
 local function Size(value)
     local reservedHeight = 44
-    local maximum = math.max(180, math.min(600, UIParent:GetWidth()-80, UIParent:GetHeight()-reservedHeight))
+    -- Forever may stop drawing the map above roughly 450 UI units even when SetSize succeeds.
+    -- Cap the visible map and its frame together, avoiding an oversized black panel.
+    local maximum = math.max(180, math.min(440, UIParent:GetWidth()-80, UIParent:GetHeight()-reservedHeight))
     return math.floor(math.max(180, math.min(maximum, Number(value, 300))) + 0.5)
 end
 
@@ -332,7 +334,7 @@ local function ToggleOptions()
         sizeSlider = CreateFrame("Slider", nil, options, "OptionsSliderTemplate")
         sizeSlider:SetPoint("TOPLEFT", 24, -84)
         sizeSlider:SetSize(340, 18)
-        sizeSlider:SetMinMaxValues(180, 600)
+        sizeSlider:SetMinMaxValues(180, 440)
         sizeSlider:SetValueStep(10)
         if sizeSlider.SetObeyStepOnDrag then sizeSlider:SetObeyStepOnDrag(true) end
         sizeSlider:SetScript("OnValueChanged", function(_, value)
@@ -562,7 +564,7 @@ SlashCmdList.VOIDMARKMINIMAP = function(message)
         db.locked = command == "lock"; Apply()
         Say(db.locked and "Position locked." or "Drag the zone bar to move the map.")
     elseif command == "size" then
-        if not tonumber(value) then Say("Usage: /vmm size 300 (180-600)"); return end
+        if not tonumber(value) then Say("Usage: /vmm size 300 (180-440)"); return end
         db.size = Size(value); Apply()
     elseif command == "reset" then Reset()
     elseif command == "" then ToggleOptions()
