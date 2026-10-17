@@ -1,5 +1,6 @@
 local frames, combat, messages = {}, false, {}
 local cursorX = 900
+unpack=unpack or table.unpack
 local Methods = {}
 local function noop() end
 for _, key in ipairs({"SetFrameStrata", "SetMovable", "SetClampedToScreen", "SetBackdrop",
@@ -19,6 +20,14 @@ function Methods:GetTop() return 900 end
 function Methods:SetPoint(...) self.point={...} end
 function Methods:ClearAllPoints() self.point=nil end
 function Methods:SetParent(p) self.parent=p end
+function Methods:GetParent() return self.parent end
+function Methods:GetFrameStrata() return self.strata or "MEDIUM" end
+function Methods:SetFrameStrata(s) self.strata=s end
+function Methods:GetNumPoints() return self.point and 1 or 0 end
+function Methods:GetPoint() return unpack(self.point) end
+function Methods:GetScript(e) return self.scripts[e] end
+function Methods:SetNormalTexture(v) self.normalTexture=v end
+function Methods:SetHighlightTexture(v) self.highlightTexture=v end
 function Methods:SetFrameLevel(v) self.level=v end
 function Methods:GetFrameLevel() return self.level or 1 end
 function Methods:SetMaskTexture(t) self.mask=t end
@@ -75,9 +84,15 @@ event("PLAYER_LOGIN")
 assert(not VoidMarkMiniMapFrame,"Startup must defer in combat")
 combat=false
 event("PLAYER_REGEN_ENABLED")
+if VMM_TEST_CONFLICT then
+    assert(not VoidMarkMiniMapFrame,"Conflicting minimap owner must leave native minimap untouched")
+    assert(Minimap.width==140)
+    realPrint("PASS: active minimap conflict pauses styling")
+    return
+end
 assert(Minimap.width==300 and Minimap.height==300)
 assert(GetMinimapShape()=="SQUARE")
-assert(VoidMarkMiniMapDB.point=="TOPRIGHT" and VoidMarkMiniMapDB.x==-35)
+assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
 assert(VoidMarkMiniMapDB.locked==true)
 assert(MinimapCluster.Tracking.parent.parent==VoidMarkMiniMapFrame)
 assert(MinimapCluster.MailFrame.parent.parent==VoidMarkMiniMapFrame)
@@ -155,4 +170,53 @@ assert(VoidMarkMiniMapFrame.height<=400,"Dock must fit screen too")
 event("ZONE_CHANGED")
 event("PLAYER_ENTERING_WORLD")
 controller.scripts.OnUpdate(controller,11)
+-- Drawer captures supported buttons, keeps hidden buttons hidden, skips protected ones,
+-- and restores all saved points/scripts when disabled.
+local icon=CreateFrame("Button",nil,Minimap)
+icon:SetSize(32,32)
+icon:SetPoint("CENTER",Minimap,"CENTER",10,20)
+local dragStart=function() end
+icon:SetScript("OnDragStart",dragStart)
+local hidden=CreateFrame("Button",nil,Minimap)
+hidden:Hide()
+local protected=CreateFrame("Button",nil,Minimap)
+protected.IsProtected=function() return true end
+local lib={GetButtonList=function() return {"Test","Hidden","Protected"} end,
+    GetMinimapButton=function(_,name) return ({Test=icon,Hidden=hidden,Protected=protected})[name] end}
+LibStub=function() return lib end
+controller.scripts.OnUpdate(controller,2)
+assert(icon.parent==VoidMarkMiniMapDrawer)
+assert(not icon:GetScript("OnDragStart"))
+assert(not hidden:IsShown())
+assert(protected.parent==Minimap)
+assert(not VoidMarkMiniMapDrawer:IsShown(),"Drawer defaults closed")
+local capturedScale=icon:GetScale()
+combat=true
+VoidMarkMiniMapDB.drawer=false
+controller.scripts.OnUpdate(controller,2)
+assert(icon.parent==VoidMarkMiniMapDrawer,"Restoration must wait until combat ends")
+combat=false
+event("PLAYER_REGEN_ENABLED")
+assert(icon.parent==Minimap and icon:GetScale()==1)
+assert(icon:GetScript("OnDragStart")==dragStart)
+assert(icon.point[4]==10 and icon.point[5]==20)
+assert(not hidden:IsShown())
+VoidMarkMiniMapDB.coordinates=true
+local coord
+controller.scripts.OnUpdate(controller,0.5)
+for _,frame in ipairs(frames) do if frame.text=="--, --" then coord=frame end end
+assert(coord,"Missing coordinate API must show a placeholder")
+C_Map={GetBestMapForUnit=function() return 1 end,
+    GetPlayerMapPosition=function() return {GetXY=function() return .25,.75 end} end}
+controller.scripts.OnUpdate(controller,0.5)
+assert(coord.text=="25.0, 75.0")
+C_Map.GetPlayerMapPosition=function() error("Restricted map") end
+controller.scripts.OnUpdate(controller,0.5)
+assert(coord.text=="--, --")
+VoidMarkMiniMapDB.point="BOTTOMRIGHT"
+VoidMarkMiniMapDB.x=99999;VoidMarkMiniMapDB.y=-99999
+event("DISPLAY_SIZE_CHANGED")
+assert(VoidMarkMiniMapDB.x>=0 and VoidMarkMiniMapDB.x<=UIParent:GetWidth()-VoidMarkMiniMapFrame:GetWidth())
+assert(VoidMarkMiniMapDB.y<=0 and VoidMarkMiniMapDB.y>=-UIParent:GetHeight()+VoidMarkMiniMapFrame:GetHeight())
 realPrint("PASS: startup, corrupt settings, sparse/late controls, combat deferral, commands, drag, resize/UI scale, options, zoom, reset, screen cap")
+realPrint("PASS: drawer capture/restore, protected and hidden icons, coordinates/failure fallback, saved position recovery")

@@ -3,7 +3,11 @@ local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
+local drawer, drawerToggle, coordinates
+local drawerEntries, drawerSeen = {}, {}
+local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
 local defaults = { size = 300, locked = true, clock = true, purple = true,
+    coordinates = false, drawer = true, accent = "purple",
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
     RIGHT=true, BOTTOMLEFT=true, BOTTOM=true, BOTTOMRIGHT=true }
@@ -102,6 +106,101 @@ local function LayoutControls()
     holder:SetSize(db.size+8, db.size+52+dockHeight)
 end
 
+-- Only supported, non-protected addon buttons are moved. Never grab arbitrary minimap children.
+local function LayoutDrawer()
+    if not drawer then return end
+    if InCombatLockdown() then pending = true; return end
+    local function Add(button, disableMouseDrag)
+        if not button or drawerSeen[button] or (button.IsProtected and button:IsProtected()) then return end
+        if not button.GetParent or not button.GetNumPoints then return end
+        local entry = {button=button, parent=button:GetParent(), scale=button:GetScale(),
+            strata=button:GetFrameStrata(),level=button:GetFrameLevel(),points={},scripts={}}
+        for i=1,button:GetNumPoints() do entry.points[i]={button:GetPoint(i)} end
+        local names = {"OnDragStart", "OnDragStop"}
+        if disableMouseDrag then names[#names+1]="OnMouseDown"; names[#names+1]="OnMouseUp" end
+        for _,name in ipairs(names) do
+            entry.scripts[#entry.scripts+1]={name,button:GetScript(name)}
+            button:SetScript(name,nil)
+        end
+        drawerSeen[button]=true
+        drawerEntries[#drawerEntries+1]=entry
+        button:SetParent(drawer)
+        button:SetFrameStrata("DIALOG")
+        button:SetFrameLevel(drawer:GetFrameLevel()+2)
+        button:SetScale(math.min(1,26/math.max(button:GetWidth(),button:GetHeight(),1)))
+    end
+    if not db.drawer then
+        for _,entry in ipairs(drawerEntries) do
+            local button=entry.button
+            button:SetParent(entry.parent)
+            button:SetFrameStrata(entry.strata)
+            button:SetFrameLevel(entry.level)
+            button:SetScale(entry.scale)
+            button:ClearAllPoints()
+            for _,point in ipairs(entry.points) do button:SetPoint(unpack(point)) end
+            for _,script in ipairs(entry.scripts) do button:SetScript(script[1],script[2]) end
+        end
+        drawerEntries,drawerSeen={},{}
+        drawer:Hide(); drawerToggle:Hide()
+        return
+    end
+    local lib=LibStub and LibStub("LibDBIcon-1.0",true)
+    if lib and lib.GetButtonList and lib.GetMinimapButton then
+        local names=lib:GetButtonList()
+        table.sort(names)
+        for _,name in ipairs(names) do Add(lib:GetMinimapButton(name)) end
+    end
+    Add(_G.VoidMarkNexusMinimap,true)
+    Add(_G.VoidMarkMinimapButton)
+    local count=0
+    for _,entry in ipairs(drawerEntries) do
+        local button=entry.button
+        if button:IsShown() then
+            local scale=button:GetScale()
+            button:ClearAllPoints()
+            button:SetPoint("CENTER",drawer,"TOPLEFT",(20+(count%5)*32)/scale,
+                (-20-math.floor(count/5)*32)/scale)
+            count=count+1
+        end
+    end
+    drawer:SetSize(168,math.max(40,math.ceil(count/5)*32+8))
+    drawerToggle:SetText("Addons "..count)
+    drawerToggle:Show()
+end
+
+local function RecoverPosition()
+    -- Convert the saved anchor into a clamped top-left position, preserving visible placement.
+    local width,height=UIParent:GetWidth(),UIParent:GetHeight()
+    local w,h=holder:GetWidth(),holder:GetHeight()
+    local point=db.point
+    local x=point:find("LEFT") and db.x or (point:find("RIGHT") and width-w+db.x or (width-w)/2+db.x)
+    local top=point:find("TOP") and height+db.y or (point:find("BOTTOM") and h+db.y or (height+h)/2+db.y)
+    x=math.max(0,math.min(math.max(0,width-w),x))
+    top=math.max(math.min(h,height),math.min(height,top))
+    db.point,db.x,db.y="TOPLEFT",x,top-height
+end
+
+local function UpdateCoordinates()
+    if not coordinates then return end
+    coordinates:SetShown(db.coordinates)
+    if not db.coordinates then return end
+    local text="--, --"
+    -- Instances and restricted map data must not cause errors or disturb the world map.
+    local ok,result=pcall(function()
+        if not C_Map or not C_Map.GetBestMapForUnit or not C_Map.GetPlayerMapPosition then return end
+        local map=C_Map.GetBestMapForUnit("player")
+        local position=map and C_Map.GetPlayerMapPosition(map,"player")
+        if not position then return end
+        local x,y=position:GetXY()
+        if issecretvalue and (issecretvalue(x) or issecretvalue(y)) then return end
+        if type(x)=="number" and type(y)=="number" and x>=0 and x<=1 and y>=0 and y<=1 then
+            return string.format("%.1f, %.1f",x*100,y*100)
+        end
+    end)
+    if ok and result then text=result end
+    coordinates:SetText(text)
+end
+
 local function UpdateLabels()
     if not ready then return end
     zone:SetText(GetMinimapZoneText() or "")
@@ -120,6 +219,9 @@ local function UpdateOptions()
     lockButton:SetText(db.locked and "Unlock position" or "Lock position")
     options.clock:SetChecked(db.clock)
     options.purple:SetChecked(db.purple)
+    options.coordinates:SetChecked(db.coordinates)
+    options.drawer:SetChecked(db.drawer)
+    options.accent:SetText("Border: "..db.accent)
     options.status:SetText(pending and "Changes queued until combat ends." or
         (db.locked and "Position and resize handle locked." or "Drag the zone bar or bottom-right resize handle."))
     options.refreshing = false
@@ -132,13 +234,17 @@ local function Apply()
     applying = true
     db.size = Size(db.size)
     LayoutControls()
+    RecoverPosition()
     holder:ClearAllPoints()
     holder:SetPoint(db.point, UIParent, db.point, db.x, db.y)
     Minimap:ClearAllPoints()
     Minimap:SetPoint("TOPLEFT", holder, "TOPLEFT", 4, -26)
     Minimap:SetSize(db.size, db.size)
     Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
-    if db.purple then holder:SetBackdropBorderColor(0.55, 0.25, 0.85, 1)
+    if not accents[db.accent] then db.accent="purple" end
+    if db.purple then
+        local color=accents[db.accent]
+        holder:SetBackdropBorderColor(color[1],color[2],color[3],1)
     else holder:SetBackdropBorderColor(0.2, 0.2, 0.2, 1) end
     header:EnableMouse(not db.locked)
     grip:SetShown(not db.locked)
@@ -146,8 +252,10 @@ local function Apply()
     if lib and lib.GetButtonList and lib.Refresh then
         for _, name in ipairs(lib:GetButtonList()) do lib:Refresh(name) end
     end
+    LayoutDrawer()
     pending, applying = false, false
     UpdateLabels()
+    UpdateCoordinates()
     UpdateOptions()
 end
 
@@ -160,7 +268,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 280)
+        options:SetSize(390, 390)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -199,7 +307,18 @@ local function ToggleOptions()
             return check
         end
         options.clock = Check("Show server clock", -153, "clock")
-        options.purple = Check("Purple border", -185, "purple")
+        options.purple = Check("Colored border", -185, "purple")
+        options.coordinates = Check("Show player coordinates", -217, "coordinates")
+        options.drawer = Check("Collect supported addon buttons", -249, "drawer")
+        options.accent = Button(options,"",180,function()
+            local nextColor={purple="cyan",cyan="amber",amber="purple"}
+            db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
+        end)
+        options.accent:SetPoint("TOPLEFT",22,-290)
+        local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
+        compatibility:SetPoint("TOPLEFT",22,-322)
+        compatibility:SetPoint("TOPRIGHT",-22,-322)
+        compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
         options.status:SetPoint("BOTTOMRIGHT", -14, 14)
@@ -221,6 +340,17 @@ local function Initialize()
         return
     end
     LoadSettings()
+    if LeaPlusLC and LeaPlusLC.MinimapModder == "On" then
+        Say("Turn off Leatrix Plus 'Enhance minimap', then /reload. Minimap styling paused to avoid a conflict.")
+        return
+    end
+    if MoveAny and type(MoveAny.IsEnabled)=="function" then
+        local ok,enabled=pcall(MoveAny.IsEnabled,MoveAny,"MINIMAP",false)
+        if ok and enabled then
+            Say("Turn off MoveAny minimap movement, then /reload. Minimap styling paused to avoid a conflict.")
+            return
+        end
+    end
     holder = CreateFrame("Frame", "VoidMarkMiniMapFrame", UIParent, "BackdropTemplate")
     holder:SetFrameStrata("LOW")
     holder:SetMovable(true)
@@ -243,7 +373,7 @@ local function Initialize()
     end
     header = CreateFrame("Frame", nil, holder)
     header:SetPoint("TOPLEFT", 4, -3)
-    header:SetPoint("TOPRIGHT", -30, -3)
+    header:SetPoint("TOPRIGHT", -100, -3)
     header:SetHeight(22)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
@@ -268,11 +398,31 @@ local function Initialize()
     zone:SetPoint("LEFT", 5, 0)
     zone:SetPoint("RIGHT", -5, 0)
     zone:SetWordWrap(false)
-    local gear = Button(holder, "*", 24, ToggleOptions)
+    local gear = CreateFrame("Button",nil,holder)
+    gear:SetSize(22,22)
+    gear:SetNormalTexture("Interface\\Icons\\Trade_Engineering")
+    gear:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+    gear:SetScript("OnClick",ToggleOptions)
     gear:SetPoint("TOPRIGHT", -3, -3)
     Tooltip(gear, "VoidMark Mini Map", "Click to adjust map size, lock position, or reset.")
     clock = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     clock:SetPoint("BOTTOMLEFT", 8, 8)
+    coordinates=holder:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    coordinates:SetPoint("BOTTOMRIGHT",-26,8)
+    drawer=CreateFrame("Frame","VoidMarkMiniMapDrawer",UIParent,"BackdropTemplate")
+    drawer:SetFrameStrata("DIALOG")
+    drawer:SetClampedToScreen(true)
+    drawer:SetPoint("TOPRIGHT",holder,"TOPRIGHT",0,-26)
+    Backdrop(drawer)
+    drawer:EnableMouse(true)
+    drawer:Hide()
+    UISpecialFrames[#UISpecialFrames+1]="VoidMarkMiniMapDrawer"
+    drawerToggle=Button(holder,"Addons",68,function()
+        if InCombatLockdown() then Say("Open the addon drawer after combat."); return end
+        LayoutDrawer(); drawer:SetShown(not drawer:IsShown())
+    end)
+    drawerToggle:SetPoint("TOPRIGHT",-28,-3)
+    Tooltip(drawerToggle,"Addon buttons","Click to open or close. Escape closes the drawer. Hidden addon icons stay hidden.")
     grip = CreateFrame("Button", "VoidMarkMiniMapResize", holder)
     grip:SetSize(18, 18)
     grip:SetPoint("BOTTOMRIGHT", -3, 3)
@@ -347,8 +497,13 @@ VM:SetScript("OnEvent", function(_, event)
         if ready then Apply() end
     else UpdateLabels() end
 end)
-local elapsed = 0
+local elapsed, coordinateElapsed, drawerElapsed = 0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 10 then elapsed = 0; UpdateLabels() end
+    if not ready then return end
+    coordinateElapsed=coordinateElapsed+delta
+    drawerElapsed=drawerElapsed+delta
+    if coordinateElapsed>=0.5 then coordinateElapsed=0; UpdateCoordinates() end
+    if drawerElapsed>=2 then drawerElapsed=0; LayoutDrawer() end
 end)
