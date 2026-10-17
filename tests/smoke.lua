@@ -8,6 +8,17 @@ for _, key in ipairs({"SetFrameStrata", "SetMovable", "SetClampedToScreen", "Set
     "SetValueStep", "SetObeyStepOnDrag", "SetMinMaxValues", "EnableMouseWheel", "RegisterEvent"}) do
     Methods[key] = noop
 end
+function Methods:GetStringWidth()
+    local text=self.text or ""
+    local width=0
+    for line in (text.."\n"):gmatch("(.-)\n") do width=math.max(width,#line*(self.fontSize or 14)*.52) end
+    return width
+end
+function Methods:SetTexture(v) self.texture=v end
+function Methods:SetTexCoord(...) self.texcoord={...} end
+function Methods:SetRotation(v) self.rotation=v end
+function Methods:SetJustifyH(v) self.justify=v end
+function Methods:RegisterEvent(event) self.registered=self.registered or {};self.registered[event]=true end
 function Methods:GetFont() return "Fonts/FRIZQT__.TTF",10,"" end
 function Methods:SetFont(path,size,flags) self.fontSize,self.fontFlags=size,flags end
 function Methods:SetShadowColor() end
@@ -105,9 +116,12 @@ function GetCursorPosition() return cursorX,500 end
 local realPrint=print
 function print(text) messages[#messages+1]=text end
 VoidMarkMiniMapDB={size=0/0,point="garbage",x=math.huge,locked="bad",clock=true}
+if VMM_TEST_SAVED_SETTINGS then VoidMarkMiniMapDB.durability=false end
+assert(loadfile("Footer.lua"))()
 assert(loadfile("VoidMarkMiniMap.lua"))("VoidMarkMiniMap")
 local controller=frames[5] -- find by PLAYER_LOGIN handler, not frame index
 for _,frame in ipairs(frames) do if frame.scripts.OnEvent then controller=frame end end
+assert(controller.registered.UPDATE_INVENTORY_DURABILITY and controller.registered.PLAYER_EQUIPMENT_CHANGED and controller.registered.MERCHANT_CLOSED,"Durability events missing")
 local function event(name) controller.scripts.OnEvent(controller,name) end
 local function command(s) SlashCmdList.VOIDMARKMINIMAP(s) end
 combat=true
@@ -122,6 +136,12 @@ if VMM_TEST_CONFLICT then
     return
 end
 assert(Minimap.width==300 and Minimap.height==300)
+if VMM_TEST_SAVED_SETTINGS then
+ assert(VoidMarkMiniMapDB.durability==false,"Saved durability-off preference was overwritten")
+ event("PLAYER_ENTERING_WORLD")
+ assert(VoidMarkMiniMapDB.durability==false,"Reload/startup events lost durability preference")
+ realPrint("PASS: saved durability-off preference survives initialization")
+end
 assert(GetMinimapShape()=="SQUARE")
 assert(Minimap:GetFrameStrata()=="BACKGROUND" and VoidMarkMiniMapFrame:GetFrameStrata()=="BACKGROUND", "Quest objectives should render above map")
 assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
@@ -375,8 +395,8 @@ assert(TaliaaFPSFrame.parent==fallback.parent,"Embed native FPS frame in footer"
 assert(TaliaaFPSFrame:GetScript("OnUpdate")==update)
 assert(not TaliaaFPSFrame.mouse and not fallback:IsShown())
 assert(TaliaaFPSDB.scale==1.4 and TaliaaFPSDB.x==-20,"Do not overwrite standalone settings")
-assert(VoidMarkMiniMapFrame.height==Minimap.height+30,"Reserve footer space outside terrain")
-assert(fallback.fontSize==14 and fallback.fontFlags=="OUTLINE","Footer must use readable outlined text")
+assert(VoidMarkMiniMapFrame.height==Minimap.height+38,"Reserve footer space outside terrain")
+assert(fallback.fontSize>=12 and fallback.fontSize<=14 and fallback.fontFlags=="OUTLINE","Footer must use readable outlined text")
 assert(VoidMarkMiniMapOptions.fps:GetChecked(),"Show FPS defaults on")
 VoidMarkMiniMapOptions.fps:SetChecked(false)
 VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
@@ -404,29 +424,29 @@ local function checkClock(server,localTime,expected)
     VoidMarkMiniMapOptions.localClock.scripts.OnClick(VoidMarkMiniMapOptions.localClock)
     local found
     for _,f in ipairs(frames) do
-        if f.kind=="FontString" and f.parent==fallback.parent and f.text==expected then found=f end
+        if f.kind=="FontString" and f.parent==fallback.parent and (f.text or ""):gsub("\n"," / ")==expected then found=f end
     end
     assert(found,"Missing expected clock text: "..expected)
     assert(found:IsShown()==(server or localTime))
 end
-checkClock(true,false,"S 22:45")
-checkClock(false,true,"L 16:25")
-checkClock(true,true,"S 22:45  L 16:25")
+checkClock(true,false,"22:45")
+checkClock(false,true,"16:25")
+checkClock(true,true,"Server 22:45 / Local 16:25")
 checkClock(false,false,"")
-checkClock(true,false,"S 22:45")
+checkClock(true,false,"22:45")
 assert(VoidMarkMiniMapOptions.clock24:GetChecked(),"Existing clocks default to 24-hour")
 VoidMarkMiniMapOptions.clock24:SetChecked(false)
 VoidMarkMiniMapOptions.clock24.scripts.OnClick(VoidMarkMiniMapOptions.clock24)
-checkClock(true,false,"S 10:45 PM")
-checkClock(false,true,"L 4:25 PM")
-checkClock(true,true,"S 10:45 PM  L 4:25 PM")
+checkClock(true,false,"10:45 PM")
+checkClock(false,true,"4:25 PM")
+checkClock(true,true,"Server 10:45 PM / Local 4:25 PM")
 GetGameTime=function() return 0,5 end
-checkClock(true,false,"S 12:05 AM")
+checkClock(true,false,"12:05 AM")
 GetGameTime=function() return 12,0 end
-checkClock(true,false,"S 12:00 PM")
+checkClock(true,false,"12:00 PM")
 VoidMarkMiniMapOptions.clock24:SetChecked(true)
 VoidMarkMiniMapOptions.clock24.scripts.OnClick(VoidMarkMiniMapOptions.clock24)
-checkClock(true,false,"S 12:00")
+checkClock(true,false,"12:00")
 realPrint("PASS: saved 12/24-hour toggle, both clocks, midnight and noon")
 realPrint("PASS: server/local/both/neither clock choices and compact overlay header geometry")
 realPrint("PASS: FPS setting hides/restores embedded and fallback counters; larger outlined footer")
@@ -450,6 +470,52 @@ realPrint("PASS: quest progress preserved, zero icon scale bounded, unique minim
 local gameClock,fpsAPI=GetGameTime,GetFramerate
 GetGameTime=function() return nil,nil end;GetFramerate=function() return 0/0 end
 controller.scripts.OnUpdate(controller,2)
-checkClock(true,false,"S --:--")
+checkClock(true,false,"--:--")
 GetGameTime,GetFramerate=gameClock,fpsAPI
 realPrint("PASS: unavailable clocks and non-finite FPS do not stop minimap updates")
+
+-- Event-driven durability and setting behavior use the actual live footer.
+GetInventoryItemDurability=function(slot) if slot==1 then return 92,100 end end
+event("UPDATE_INVENTORY_DURABILITY")
+local durability
+for _,f in ipairs(frames) do if f.kind=="FontString" and f.parent==fallback.parent and (f.text=="Durability: 92%" or f.text=="92%") then durability=f end end
+assert(durability,"Durability event did not refresh actual equipment")
+assert(VoidMarkMiniMapOptions.durability:GetChecked(),"Durability defaults on")
+VoidMarkMiniMapOptions.durability:SetChecked(false)
+VoidMarkMiniMapOptions.durability.scripts.OnClick(VoidMarkMiniMapOptions.durability)
+assert(not durability:IsShown() and not VoidMarkMiniMapDB.durability)
+VoidMarkMiniMapOptions.durability:SetChecked(true)
+VoidMarkMiniMapOptions.durability.scripts.OnClick(VoidMarkMiniMapOptions.durability)
+GetInventoryItemDurability=function(slot) if slot==1 then return 20,100 end end
+event("PLAYER_EQUIPMENT_CHANGED")
+assert(durability.text=="Durability: 20%" or durability.text=="20%")
+GetInventoryItemDurability=function(slot) if slot==1 then return 100,100 end end
+event("MERCHANT_CLOSED")
+assert(durability.text=="Durability: 100%" or durability.text=="100%")
+UIParent:SetSize(1920,1080)
+for _,size in ipairs({180,220,300,400,600,180,600}) do
+ command("size "..size)
+ controller.scripts.OnUpdate(controller,.5)
+ local intervals={}
+ if TaliaaFPSFrame and TaliaaFPSFrame:IsShown() then
+  local left=TaliaaFPSFrame.point[4]
+  assert(left>=0 and left+TaliaaFPSFrame.width<=size,"Embedded FPS escaped footer bounds")
+  intervals[#intervals+1]={left,left+TaliaaFPSFrame.width}
+ end
+ for _,f in ipairs(frames) do
+  if f.kind=="FontString" and f.parent==fallback.parent and f:IsShown() and f.point and f.point[1]=="LEFT" then
+   local left=f.point[4];assert(left>=0 and left+f.width<=size,"Footer text escaped minimap width")
+   intervals[#intervals+1]={left,left+f.width}
+  end
+ end
+ table.sort(intervals,function(a,b)return a[1]<b[1] end)
+ for i=2,#intervals do assert(intervals[i][1]>=intervals[i-1][2],"Footer labels overlap") end
+end
+assert(durability.text=="Durability: 100%","Expanding must restore the full durability label")
+local localDate=date;date=function()error("Date unavailable")end
+checkClock(false,true,"--:--");date=localDate
+GetFramerate=function()return nil end;controller.scripts.OnUpdate(controller,.25)
+assert(fallback.text=="FPS: --","Missing FPS API value did not become unknown")
+GetInventoryItemDurability=nil;event("UPDATE_INVENTORY_DURABILITY")
+assert(durability.text=="Durability: --","Missing durability data must remain unknown")
+realPrint("PASS: footer equipment/repair events, durability toggle, responsive bounds, expansion and missing date/durability")

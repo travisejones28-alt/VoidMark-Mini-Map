@@ -14,3 +14,9 @@ Validation: Lua 5.1 smoke regressions pass in normal, Leatrix-conflict and MoveA
 Installable ZIP: `dist/VoidMarkMiniMap.zip`; `python tools/package.py --check` verifies canonical source contents. Tests require `lupa==2.8`: `python tests/run.py`.
 
 In-game: enable all four addons; verify `/vmini` opens map settings and `/vmm` opens Market; move Nexus icons around the square with collection both on/off; inspect quest objective overlays; open the world map and bags; test drag/resize, combat recovery and clock/FPS options. Mock frame strata do not establish actual rendering or secure-frame behavior. Very dense icon collections and narrow footers still need visual QA.
+
+## 0.2.0 footer implementation
+
+Preserved saved preferences and Interface 16001. Added a durability toggle without a database reset, weighted equipped durability with guarded reads, threshold colors, equipment/durability/merchant events and slow recovery polling. Local-only clocks have no prefix; both clocks are labeled. Replaced fixed offsets with measured full/compact layouts, predictable information priority and reversible hiding. Added a thin purple treatment, small separators and built-in icons. Existing FPS embedding and its update script are retained. No installed addons were modified.
+
+Validation: 10 pure Lua 5.1 footer regression groups, including 1,376 layout combinations, plus all existing smoke checks and a saved-durability-off startup variant. Normal and both conflict startup variants pass. Shared real-source four-addon mocked integration passes with Nexus before/after Mini Map. Source compilation, Interface and footer-before-UI load order, and source/ZIP consistency pass. Rendering, actual repair/damage events, secure behavior and appearance under individual UI scales require in-game verification.

@@ -1,5 +1,7 @@
 # VoidMark Mini Map
 
+Current release: **0.2.0** (Forever Interface **16001**).
+
 Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
 
 
@@ -7,7 +9,7 @@ Standalone square minimap for WoW Forever (interface 16001). No VoidMark or ElvU
 
 ## Install
 
-Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC and Lua file must sit directly inside that folder. Restart WoW after first installation.
+Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC, `Footer.lua`, and `VoidMarkMiniMap.lua` must sit directly inside that folder. Restart WoW after first installation.
 
 ## Controls
 
@@ -31,9 +33,21 @@ This enlarges the actual minimap frame, not the underlying terrain visibility ra
 
 ## Validation
 
-Lua 5.1 syntax validation passed with luaparse. The mocked-frame test passed using Fengari's Lua runtime: startup, invalid saved values, combat deferral, sparse and late Blizzard controls, commands, dragging, resizing at nondefault UI scale, options, zoom limits, reset, and screen-size limits including the button dock.
+Run `python tests/run.py` with `lupa==2.8` installed. It compiles addon Lua under stock Lua 5.1, checks the Interface 16001 TOC/load order, tests footer calculations/layout, and runs normal, saved-durability-off, Leatrix and MoveAny startup variants. The existing icon collection, nine-angle Nexus positioning, combat deferral, dragging, sizing, zoom, native chrome suppression and FPS embedding tests remain active. `python tools/package.py --check` verifies the distribution ZIP against source.
 
-Run `lua tests/smoke.lua` from this directory to repeat the behavior test. These checks cannot replace an in-game check of the Forever client, its textures or other addons. This initial build has not been tested in-game.
+The shared four-addon mocked-client integration also passed locally in both Nexus/Mini Map load orders. These tests inspect handlers, calculated bounds and frame attributes; they do not establish actual Forever rendering, protected execution, repair-event delivery or third-party font appearance.
+
+## 0.2.0 footer
+
+The footer presents **Time | Coordinates | Durability | FPS**, with a translucent black background, one-pixel purple border, quiet highlight, small diamond separators, and clock/location/shield icons. Text uses an outlined 12–14 point font with a subtle shadow, adjusted for map size.
+
+- Local-only time has no prefix: `3:11 PM`. Server-only time also stands alone. Both clocks use `Server` and `Local` labels; at narrow widths the clock segment uses two lines. The saved 12/24-hour preference is unchanged.
+- Enable **Show equipment durability** in `/vmini`. It defaults on for an existing character without this new setting. Durability is the sum of current equipped-item durability divided by the sum of maximum durability for equipment that reports valid durability. It is not the lowest single item's percentage. Non-durable/empty slots are ignored; unavailable readings show `--` when no valid equipment can be measured.
+- Durability is green above 70%, yellow from 30% through 70%, and red below 30%. It refreshes on equipment changes, durability updates, merchant close, login/entering world, and a five-second recovery poll while enabled. No equipment history is stored.
+- The layout measures natural text widths. It first shortens `Durability: 92%` to `92%`, stacks dual clocks if needed, then removes icons if needed. If space still runs out it hides FPS first, then coordinates, then durability, keeping time. Expanding restores enabled information automatically. Actual text areas stay within minimap width; hidden information does not change its saved toggle.
+- Existing TaliaaFPS live-frame integration retains its update script and standalone saved settings. Footer layout is recalculated only when its displayed inputs change or layout is reapplied.
+
+In-game checks: compare map sizes 180/300/400/600 with every footer toggle; test local/server/both clocks in 12/24-hour format; resize down and back up; damage and repair equipment, swap gear, and `/reload`; check clock/map/shield textures and text alignment at your UI scale; test with and without TaliaaFPS and during combat. Existing map behavior still needs its usual visual and click checks.
 
 ## 0.1.1
 

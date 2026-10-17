@@ -5,7 +5,15 @@ from lupa.lua51 import LuaRuntime
 
 root = Path(__file__).resolve().parents[1]
 os.chdir(root)
-for setup in ('', 'VMM_TEST_CONFLICT=true; LeaPlusLC={MinimapModder="On"}',
+runtime = LuaRuntime()
+compile_lua = runtime.eval('function(s,n) local f,e=loadstring(s,n); assert(f,e) end')
+for source in root.glob('*.lua'):
+    compile_lua(source.read_text(encoding='utf-8'), source.name)
+toc = (root/'VoidMarkMiniMap.toc').read_text(encoding='utf-8')
+assert '## Interface: 16001' in toc
+assert toc.index('Footer.lua') < toc.index('VoidMarkMiniMap.lua')
+runtime.execute("dofile('Footer.lua'); dofile('tests/footer.lua')")
+for setup in ('', 'VMM_TEST_SAVED_SETTINGS=true', 'VMM_TEST_CONFLICT=true; LeaPlusLC={MinimapModder="On"}',
               'VMM_TEST_CONFLICT=true; MoveAny={IsEnabled=function() return true end}'):
     runtime = LuaRuntime()
     if setup:

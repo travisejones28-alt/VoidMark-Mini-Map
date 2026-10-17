@@ -1,10 +1,15 @@
 local addonName = ...
+local Footer = VoidMarkMiniMapFooter
+local LayoutFooter, UpdateDurability
+local footerIcons, footerSeparators = {}, {}
+local durabilityText, durabilityPercent, clockFull, clockCompact
+local embeddedFPS, footerLayoutKey
 local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
 local drawer, drawerToggle, coordinates, footer, fpsText
-local topHeight, bottomHeight = 2, 24
+local topHeight, bottomHeight = 2, 32
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
 local nativeHidden = {}
@@ -12,7 +17,7 @@ local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
-local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, fps = true, purple = true,
+local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -356,12 +361,6 @@ end
 
 local function UpdateCoordinates()
     if not coordinates then return end
-    local left = db.clock and db.localClock and (db.clock24 and 180 or 240) or ((db.clock or db.localClock) and (db.clock24 and 88 or 120) or 8)
-    local right = db.fps and 98 or 8
-    local available = db.size-left-right
-    coordinates:SetShown(db.coordinates and db.size>=260 and available>=90)
-    coordinates:ClearAllPoints()
-    coordinates:SetPoint("CENTER",footer,"LEFT",left+available/2,0)
     if not db.coordinates then return end
     local text="--, --"
     -- Instances and restricted map data must not cause errors or disturb the world map.
@@ -378,6 +377,7 @@ local function UpdateCoordinates()
     end)
     if ok and result then text=result end
     coordinates:SetText(text)
+    if LayoutFooter then LayoutFooter() end
 end
 
 local function StyleFooterText(text)
@@ -393,8 +393,10 @@ end
 -- Do not write its saved position or scale; standalone settings remain intact.
 local function LayoutFPS()
     if not footer then return end
+    footerLayoutKey=nil
     if InCombatLockdown() or InEditMode() then pending=true; return end
     local frame = _G.TaliaaFPSFrame
+    embeddedFPS = nil
     if frame and not (frame.IsProtected and frame:IsProtected()) then
         frame:SetParent(footer)
         frame:ClearAllPoints()
@@ -412,45 +414,137 @@ local function LayoutFPS()
                 end
             end
         end
+        embeddedFPS = frame
         frame:SetShown(db.fps)
         fpsText:Hide()
     else fpsText:SetShown(db.fps) end
+    if LayoutFooter then LayoutFooter() end
 end
 
 local function UpdateFPS()
-    if not fpsText or not fpsText:IsShown() then return end
+    if not fpsText then return end
     local ok,fps=pcall(function() return GetFramerate and GetFramerate() end)
-    fps=ok and Number(fps,nil) or nil
+    local readable,value=pcall(function()
+        if not ok or (issecretvalue and issecretvalue(fps)) then return end
+        return Number(fps,nil)
+    end)
+    fps=readable and value or nil
     fpsText:SetText(fps and fps>=0 and string.format("FPS: %d",math.floor(fps+0.5)) or "FPS: --")
+    if LayoutFooter then LayoutFooter() end
 end
 
 local function FormatClock(hour,minute)
-    hour,minute=Number(hour,nil),Number(minute,nil)
-    if not hour or not minute or hour<0 or hour>=24 or minute<0 or minute>=60 then return "--:--" end
-    hour,minute=math.floor(hour),math.floor(minute)
-    if db.clock24 then return string.format("%02d:%02d",hour,minute) end
-    local display=hour%12
-    if display==0 then display=12 end
-    return string.format("%d:%02d %s",display,minute,hour<12 and "AM" or "PM")
+    return Footer.Clock(hour,minute,db.clock24)
+end
+
+UpdateDurability = function()
+    if not durabilityText then return end
+    durabilityPercent=Footer.Durability(GetInventoryItemDurability)
+    durabilityText:SetTextColor(Footer.Color(durabilityPercent))
+    if LayoutFooter then LayoutFooter() end
+end
+
+LayoutFooter = function()
+    if not footer or not durabilityText then return end
+    local size=math.max(12,math.min(14,db.size/35))
+    local entries={
+        {key="time",text=clock,enabled=db.clock or db.localClock,full=clockFull or "",compact=clockCompact or "",icon=true},
+        {key="coordinates",text=coordinates,enabled=db.coordinates,icon=true},
+        {key="durability",text=durabilityText,enabled=db.durability,full="Durability: "..(durabilityPercent and string.format("%d%%",math.floor(durabilityPercent+.5)) or "--"),icon=true},
+        {key="fps",text=fpsText,enabled=db.fps},
+    }
+    local fpsRegions={}
+    if embeddedFPS and embeddedFPS.GetRegions then
+        for _,region in ipairs({embeddedFPS:GetRegions()}) do
+            if region.IsObjectType and region:IsObjectType("FontString") then
+                fpsRegions[#fpsRegions+1]=region
+            end
+        end
+    end
+    local signature={tostring(db.size),tostring(embeddedFPS)}
+    for _,e in ipairs(entries) do
+        e.full=e.full or e.text:GetText() or ""
+        signature[#signature+1]=tostring(e.enabled)..":"..e.full
+    end
+    for _,region in ipairs(fpsRegions) do signature[#signature+1]=region:GetText() or "" end
+    local key=table.concat(signature,"|")
+    if key==footerLayoutKey then return end
+    footerLayoutKey=key
+    local function measure(region,text)
+        region:SetText(text);region:SetWidth(0)
+        return region:GetStringWidth()
+    end
+    for _,e in ipairs(entries) do
+        local font=e.text:GetFont()
+        if font then e.text:SetFont(font,size,"OUTLINE") end
+        e.text:SetWordWrap(false)
+        e.full=e.full or e.text:GetText() or ""
+        e.compact=e.compact or (e.key=="durability" and (e.full:gsub("Durability: ",""))) or e.full
+        e.width=measure(e.text,e.full);e.compactWidth=measure(e.text,e.compact)
+        if e.key=="fps" and #fpsRegions>0 then
+            local widest=0
+            for _,region in ipairs(fpsRegions) do
+                local font=region:GetFont();if font then region:SetFont(font,size,"OUTLINE") end
+                region:SetWidth(0)
+                widest=math.max(widest,region:GetStringWidth())
+            end
+            e.width=math.max(e.width,widest);e.compactWidth=e.width
+        end
+    end
+    local plan=Footer.Plan(db.size,entries)
+    local previous
+    for i,e in ipairs(entries) do
+        local item=plan.items[i]
+        local shown=not not item
+        e.text:SetShown(shown and not (e.key=="fps" and embeddedFPS))
+        if footerIcons[i] then footerIcons[i]:SetShown(shown and not not item.icon) end
+        if footerSeparators[i] then footerSeparators[i]:Hide() end
+        if item then
+            local inset=item.icon and 17 or 0
+            e.text:SetText(plan.compact and e.compact or e.full)
+            e.text:ClearAllPoints();e.text:SetPoint("LEFT",footer,"LEFT",item.x+inset,0)
+            e.text:SetWidth(math.max(0,item.width-inset))
+            e.text:SetJustifyH("LEFT")
+            if footerIcons[i] then
+                footerIcons[i]:ClearAllPoints();footerIcons[i]:SetPoint("LEFT",footer,"LEFT",item.x,0)
+            end
+            if previous and footerSeparators[i] then
+                footerSeparators[i]:SetPoint("CENTER",footer,"LEFT",item.x-8,0);footerSeparators[i]:Show()
+            end
+            previous=i
+            if e.key=="fps" and embeddedFPS then
+                embeddedFPS:ClearAllPoints();embeddedFPS:SetPoint("LEFT",footer,"LEFT",item.x,0)
+                embeddedFPS:SetSize(item.width,bottomHeight-2)
+                for _,region in ipairs(fpsRegions) do
+                    region:ClearAllPoints();region:SetPoint("CENTER",embeddedFPS,"CENTER",0,0)
+                    region:SetWidth(item.width);region:SetWordWrap(false)
+                end
+            end
+        end
+    end
+    if embeddedFPS then embeddedFPS:SetShown(not not plan.items[4]) end
 end
 
 local function UpdateLabels()
     if not ready then return end
     zone:SetText(GetMinimapZoneText() or "")
-    local times={}
+    local server,localTime
     if db.clock then
         local ok,hour,minute=pcall(function() if GetGameTime then return GetGameTime() end end)
         if not ok then hour,minute=nil,nil end
-        times[#times+1]="S "..FormatClock(hour,minute)
+        server=FormatClock(hour,minute)
     end
     if db.localClock then
-        local localTime=date and date("%H:%M")
+        local ok,value=pcall(function() if date then return date("%H:%M") end end)
         local hour,minute
-        if type(localTime)=="string" then hour,minute=localTime:match("^(%d+):(%d+)$") end
-        times[#times+1]="L "..(hour and minute and FormatClock(tonumber(hour),tonumber(minute)) or "--:--")
+        if ok and type(value)=="string" then hour,minute=value:match("^(%d+):(%d+)$") end
+        localTime=FormatClock(tonumber(hour),tonumber(minute))
     end
-    clock:SetText(table.concat(times,"  "))
-    clock:SetShown(#times>0)
+    if server and localTime then
+        clockFull="Server "..server.." / Local "..localTime
+        clockCompact="Server "..server.."\nLocal "..localTime
+    else clockFull=localTime or server or "";clockCompact=clockFull end
+    LayoutFooter()
 end
 
 local function UpdateOptions()
@@ -463,6 +557,7 @@ local function UpdateOptions()
     options.localClock:SetChecked(db.localClock)
     options.clock24:SetChecked(db.clock24)
     options.fps:SetChecked(db.fps)
+    options.durability:SetChecked(db.durability)
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
@@ -507,6 +602,7 @@ local function Apply()
     pending, applying = false, false
     UpdateLabels()
     UpdateCoordinates()
+    UpdateDurability()
     UpdateOptions()
 end
 
@@ -519,7 +615,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 486)
+        options:SetSize(390, 520)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -564,14 +660,15 @@ local function ToggleOptions()
         options.fps = Check("Show FPS", -281, "fps")
         options.localClock = Check("Show local clock", -313, "localClock")
         options.clock24 = Check("Use 24-hour time (off: 12-hour AM/PM)", -345, "clock24")
+        options.durability = Check("Show equipment durability", -377, "durability")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
-        options.accent:SetPoint("TOPLEFT",22,-386)
+        options.accent:SetPoint("TOPLEFT",22,-418)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-418)
-        compatibility:SetPoint("TOPRIGHT",-22,-418)
+        compatibility:SetPoint("TOPLEFT",22,-450)
+        compatibility:SetPoint("TOPRIGHT",-22,-450)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
@@ -666,8 +763,9 @@ local function Initialize()
     footer:SetPoint("BOTTOMLEFT",holder,"BOTTOMLEFT",4,2)
     footer:SetPoint("BOTTOMRIGHT",holder,"BOTTOMRIGHT",-4,2)
     footer:SetHeight(bottomHeight)
-    footer:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"})
-    footer:SetBackdropColor(0.015,0.012,0.025,1)
+    footer:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",edgeSize=1})
+    footer:SetBackdropBorderColor(.48,.20,.72,.8)
+    footer:SetBackdropColor(0.015,0.012,0.025,.92)
     local divider=footer:CreateTexture(nil,"ARTWORK")
     divider:SetHeight(1)
     divider:SetPoint("TOPLEFT")
@@ -682,6 +780,23 @@ local function Initialize()
     fpsText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     fpsText:SetPoint("RIGHT",footer,"RIGHT",-9,0)
     StyleFooterText(fpsText)
+    durabilityText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    StyleFooterText(durabilityText)
+    local iconPaths={"Interface\\Icons\\INV_Misc_PocketWatch_01","Interface\\Icons\\INV_Misc_Map_01","Interface\\Icons\\INV_Shield_06"}
+    for i=1,4 do
+        if iconPaths[i] then
+            local icon=footer:CreateTexture(nil,"ARTWORK")
+            icon:SetSize(13,13);icon:SetTexture(iconPaths[i]);icon:SetTexCoord(.08,.92,.08,.92)
+            footerIcons[i]=icon
+        end
+        local diamond=footer:CreateTexture(nil,"ARTWORK")
+        diamond:SetSize(4,4);diamond:SetColorTexture(.65,.32,.92,.85)
+        diamond:SetRotation(math.pi/4);diamond:Hide();footerSeparators[i]=diamond
+    end
+    -- A quiet inner highlight keeps the one-pixel border from looking flat.
+    local glow=footer:CreateTexture(nil,"BACKGROUND")
+    glow:SetPoint("TOPLEFT",1,-1);glow:SetPoint("TOPRIGHT",-1,-1);glow:SetHeight(3)
+    glow:SetColorTexture(.40,.13,.65,.10)
     drawer=CreateFrame("Frame","VoidMarkMiniMapDrawer",UIParent,"BackdropTemplate")
     drawer:SetFrameStrata("DIALOG")
     drawer:SetClampedToScreen(true)
@@ -767,9 +882,12 @@ end
 
 for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
-    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "ADDON_LOADED"}) do VM:RegisterEvent(event) end
+    "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "ADDON_LOADED",
+    "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED"}) do VM:RegisterEvent(event) end
 VM:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGIN" then Initialize()
+    if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UPDATE_INVENTORY_DURABILITY" or event == "MERCHANT_CLOSED" then
+        if ready then UpdateDurability() end
+    elseif event == "PLAYER_LOGIN" then Initialize()
     elseif event == "PLAYER_REGEN_DISABLED" then
         if holder then holder.stopMoving(); holder.stopResizing() end
     elseif event == "PLAYER_REGEN_ENABLED" and pending then Initialize()
@@ -778,11 +896,13 @@ VM:SetScript("OnEvent", function(_, event)
         if ready then Apply() end
     else UpdateLabels() end
 end)
-local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed = 0,0,0,0,0
+local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed, durabilityElapsed = 0,0,0,0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 1 then elapsed = 0; UpdateLabels() end
     if not ready then return end
+    durabilityElapsed=durabilityElapsed+delta
+    if durabilityElapsed>=5 then durabilityElapsed=0; if db.durability then UpdateDurability() end end
     fpsElapsed=fpsElapsed+delta
     if fpsElapsed>=0.25 then fpsElapsed=0; UpdateFPS() end
     coordinateElapsed=coordinateElapsed+delta
