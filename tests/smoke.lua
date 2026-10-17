@@ -8,6 +8,10 @@ for _, key in ipairs({"SetFrameStrata", "SetMovable", "SetClampedToScreen", "Set
     "SetValueStep", "SetObeyStepOnDrag", "SetMinMaxValues", "EnableMouseWheel", "RegisterEvent"}) do
     Methods[key] = noop
 end
+function Methods:GetFont() return "Fonts/FRIZQT__.TTF",10,"" end
+function Methods:SetFont(path,size,flags) self.fontSize,self.fontFlags=size,flags end
+function Methods:SetShadowColor() end
+function Methods:SetShadowOffset() end
 function Methods:SetSize(w,h) self.width,self.height=w,h end
 function Methods:SetWidth(w) self.width=w end
 function Methods:SetHeight(h) self.height=h end
@@ -371,6 +375,27 @@ assert(TaliaaFPSFrame:GetScript("OnUpdate")==update)
 assert(not TaliaaFPSFrame.mouse and not fallback:IsShown())
 assert(TaliaaFPSDB.scale==1.4 and TaliaaFPSDB.x==-20,"Do not overwrite standalone settings")
 assert(VoidMarkMiniMapFrame.height==Minimap.height+54,"Reserve footer space outside terrain")
+assert(fallback.fontSize==14 and fallback.fontFlags=="OUTLINE","Footer must use readable outlined text")
+assert(VoidMarkMiniMapOptions.fps:GetChecked(),"Show FPS defaults on")
+VoidMarkMiniMapOptions.fps:SetChecked(false)
+VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
+assert(not VoidMarkMiniMapDB.fps and not TaliaaFPSFrame:IsShown() and not fallback:IsShown())
+controller.scripts.OnUpdate(controller,2)
+assert(not TaliaaFPSFrame:IsShown(),"Periodic layout must respect FPS disabled")
+VoidMarkMiniMapOptions.fps:SetChecked(true)
+VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
+assert(TaliaaFPSFrame:IsShown() and not fallback:IsShown())
+local embedded=TaliaaFPSFrame
+TaliaaFPSFrame=nil
+VoidMarkMiniMapOptions.fps:SetChecked(false)
+VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
+assert(not fallback:IsShown(),"Toggle also hides built-in fallback")
+VoidMarkMiniMapOptions.fps:SetChecked(true)
+VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
+assert(fallback:IsShown())
+TaliaaFPSFrame=embedded
+controller.scripts.OnUpdate(controller,2)
+realPrint("PASS: FPS setting hides/restores embedded and fallback counters; larger outlined footer")
 realPrint("PASS: FPS fallback, live TaliaaFPS embedding, saved settings, footer geometry")
 realPrint("PASS: saved collection-off Nexus square geometry at nine angles, combat recovery, Forever DielFrame")
 realPrint("PASS: Nexus mouse-loop capture/restore, click preservation, protected native daylight/addon compartment")

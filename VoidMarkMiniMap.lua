@@ -12,7 +12,7 @@ local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
-local defaults = { size = 300, locked = true, clock = true, purple = true,
+local defaults = { size = 300, locked = true, clock = true, fps = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -353,7 +353,7 @@ end
 
 local function UpdateCoordinates()
     if not coordinates then return end
-    coordinates:SetShown(db.coordinates and db.size>=240)
+    coordinates:SetShown(db.coordinates and db.size>=260)
     if not db.coordinates then return end
     local text="--, --"
     -- Instances and restricted map data must not cause errors or disturb the world map.
@@ -372,6 +372,15 @@ local function UpdateCoordinates()
     coordinates:SetText(text)
 end
 
+local function StyleFooterText(text)
+    text:SetFontObject("GameFontHighlight")
+    local font = text:GetFont()
+    if font then text:SetFont(font,14,"OUTLINE") end
+    text:SetTextColor(1,1,1)
+    text:SetShadowColor(0,0,0,1)
+    text:SetShadowOffset(1,-1)
+end
+
 -- Embed TaliaaFPS's live frame, retaining its own update interval/rounding.
 -- Do not write its saved position or scale; standalone settings remain intact.
 local function LayoutFPS()
@@ -382,7 +391,7 @@ local function LayoutFPS()
         frame:SetParent(footer)
         frame:ClearAllPoints()
         frame:SetPoint("RIGHT",footer,"RIGHT",-8,0)
-        frame:SetSize(76,bottomHeight-2)
+        frame:SetSize(90,bottomHeight-2)
         frame:SetScale(1)
         frame:SetBackdrop(nil)
         frame:EnableMouse(false)
@@ -391,14 +400,13 @@ local function LayoutFPS()
         if frame.GetRegions then
             for _,region in ipairs({frame:GetRegions()}) do
                 if region.IsObjectType and region:IsObjectType("FontString") then
-                    region:SetFontObject("GameFontHighlightSmall")
-                    region:SetTextColor(0.75,0.85,0.95)
+                    StyleFooterText(region)
                 end
             end
         end
-        frame:Show()
+        frame:SetShown(db.fps)
         fpsText:Hide()
-    else fpsText:Show() end
+    else fpsText:SetShown(db.fps) end
 end
 
 local function UpdateFPS()
@@ -424,6 +432,7 @@ local function UpdateOptions()
     options.sizeText:SetText("Map size: " .. db.size)
     lockButton:SetText(db.locked and "Unlock position" or "Lock position")
     options.clock:SetChecked(db.clock)
+    options.fps:SetChecked(db.fps)
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
@@ -479,7 +488,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 390)
+        options:SetSize(390, 422)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -521,14 +530,15 @@ local function ToggleOptions()
         options.purple = Check("Colored border", -185, "purple")
         options.coordinates = Check("Show player coordinates", -217, "coordinates")
         options.drawer = Check("Place addon buttons around map", -249, "drawer")
+        options.fps = Check("Show FPS", -281, "fps")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
-        options.accent:SetPoint("TOPLEFT",22,-290)
+        options.accent:SetPoint("TOPLEFT",22,-322)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-322)
-        compatibility:SetPoint("TOPRIGHT",-22,-322)
+        compatibility:SetPoint("TOPLEFT",22,-354)
+        compatibility:SetPoint("TOPRIGHT",-22,-354)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
@@ -628,12 +638,13 @@ local function Initialize()
     divider:SetColorTexture(0.38,0.22,0.52,0.8)
     clock = footer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     clock:SetPoint("LEFT", footer, "LEFT", 9, 0)
+    StyleFooterText(clock)
     coordinates=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     coordinates:SetPoint("CENTER", footer, "CENTER", 0, 0)
-    coordinates:SetTextColor(0.65,0.65,0.72)
+    StyleFooterText(coordinates)
     fpsText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     fpsText:SetPoint("RIGHT",footer,"RIGHT",-9,0)
-    fpsText:SetTextColor(0.75,0.85,0.95)
+    StyleFooterText(fpsText)
     drawer=CreateFrame("Frame","VoidMarkMiniMapDrawer",UIParent,"BackdropTemplate")
     drawer:SetFrameStrata("DIALOG")
     drawer:SetClampedToScreen(true)

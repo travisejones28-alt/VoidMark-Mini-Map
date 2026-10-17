@@ -2,7 +2,7 @@
 ## Title: VoidMark Mini Map
 ## Notes: Large square minimap with movable frame and adjustable size for Forever.
 ## Author: Taliaa
-## Version: 0.1.6
+## Version: 0.1.7
 ## SavedVariablesPerCharacter: VoidMarkMiniMapDB
 ## OptionalDeps: TaliaaFPS, Leatrix_Plus, MoveAny, SexyMap, ElvUI
 

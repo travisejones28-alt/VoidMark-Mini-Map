@@ -82,3 +82,9 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 - Simplified the top bar to a lavender zone title and discreet settings button.
 - Added an ElvUI-inspired dark footer: server time left, optional coordinates center, FPS right, with a subtle purple divider. The footer reserves its own space below the terrain.
 - Embeds TaliaaFPS's actual live frame when available, preserving its update script and saved standalone settings. Uses the same rounded FPS calculation at quarter-second intervals when that optional addon is absent.
+
+## 0.1.7
+
+- Added a saved **Show FPS** checkbox in `/vmm`; it controls both embedded TaliaaFPS and the fallback counter.
+- Increased footer text to 14 pixels with a white fill, black outline and shadow for better readability. Widened the FPS slot and suppress center coordinates on maps below 260 units to avoid crowding.
+- Tests cover toggling both FPS paths and periodic layout respecting the saved setting.
