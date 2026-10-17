@@ -76,3 +76,9 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 - Nexus square positioning now also works with the saved addon-collection option turned off. Its native drag and click handlers stay intact; circular anchors are projected onto the square perimeter with combat/Edit Mode deferral.
 - Hide Forever's actual day/night indicator, `MinimapCluster.DielFrame`. It is separate from `GameTimeFrame` (the calendar), as confirmed in the Forever client UI source: https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_Minimap/Camelot/Diel.lua
 - Tests reproduce collection disabled, nine Nexus angles, combat recovery, and daylight-frame re-show attempts.
+
+## 0.1.6
+
+- Simplified the top bar to a lavender zone title and discreet settings button.
+- Added an ElvUI-inspired dark footer: server time left, optional coordinates center, FPS right, with a subtle purple divider. The footer reserves its own space below the terrain.
+- Embeds TaliaaFPS's actual live frame when available, preserving its update script and saved standalone settings. Uses the same rounded FPS calculation at quarter-second intervals when that optional addon is absent.

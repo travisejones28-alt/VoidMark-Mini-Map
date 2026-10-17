@@ -4,7 +4,7 @@ unpack=unpack or table.unpack
 local Methods = {}
 local function noop() end
 for _, key in ipairs({"SetFrameStrata", "SetMovable", "SetClampedToScreen", "SetBackdrop",
-    "SetBackdropColor", "SetBackdropBorderColor", "SetScale", "RegisterForDrag", "SetWordWrap",
+    "SetBackdropColor", "SetBackdropBorderColor", "SetColorTexture", "SetFontObject", "SetTextColor", "SetScale", "RegisterForDrag", "SetWordWrap",
     "SetValueStep", "SetObeyStepOnDrag", "SetMinMaxValues", "EnableMouseWheel", "RegisterEvent"}) do
     Methods[key] = noop
 end
@@ -58,7 +58,8 @@ function CreateFrame(kind,name,parent,template)
     if name then _G[name]=frame end
     return frame
 end
-function Methods:CreateFontString() return CreateFrame("FontString") end
+function Methods:CreateTexture() return CreateFrame("Texture",nil,self) end
+function Methods:CreateFontString() return CreateFrame("FontString",nil,self) end
 function Methods:IsObjectType(kind) return self.kind==kind end
 function Methods:GetText() return self.text end
 function Methods:SetAlpha(v) self.alpha=v end
@@ -353,6 +354,24 @@ assert(MinimapCluster.DielFrame.parent==GameTimeFrame.parent)
 MinimapCluster.DielFrame:Show()
 MinimapCluster.DielFrame.hooks.OnShow(MinimapCluster.DielFrame)
 assert(not MinimapCluster.DielFrame:IsShown())
+-- Footer uses the real FPS addon frame and keeps its update script/settings.
+GetFramerate=function() return 86.7 end
+controller.scripts.OnUpdate(controller,0.25)
+local fallback
+for _,f in ipairs(frames) do if f.text=="FPS: 87" then fallback=f end end
+assert(fallback and fallback:IsShown(),"Fallback FPS must update without TaliaaFPS")
+TaliaaFPSDB={point="TOPRIGHT",x=-20,scale=1.4}
+TaliaaFPSFrame=CreateFrame("Frame",nil,UIParent)
+local update=function() end
+TaliaaFPSFrame:SetScript("OnUpdate",update)
+TaliaaFPSFrame:CreateFontString():SetText("FPS: 87")
+controller.scripts.OnUpdate(controller,2)
+assert(TaliaaFPSFrame.parent==fallback.parent,"Embed native FPS frame in footer")
+assert(TaliaaFPSFrame:GetScript("OnUpdate")==update)
+assert(not TaliaaFPSFrame.mouse and not fallback:IsShown())
+assert(TaliaaFPSDB.scale==1.4 and TaliaaFPSDB.x==-20,"Do not overwrite standalone settings")
+assert(VoidMarkMiniMapFrame.height==Minimap.height+54,"Reserve footer space outside terrain")
+realPrint("PASS: FPS fallback, live TaliaaFPS embedding, saved settings, footer geometry")
 realPrint("PASS: saved collection-off Nexus square geometry at nine angles, combat recovery, Forever DielFrame")
 realPrint("PASS: Nexus mouse-loop capture/restore, click preservation, protected native daylight/addon compartment")
 realPrint("PASS: nested duplicate coordinates, late/nested/anonymous zoom, sun/calendar, unrelated icons, combat safety")

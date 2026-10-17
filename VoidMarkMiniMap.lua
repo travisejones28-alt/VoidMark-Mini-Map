@@ -3,7 +3,8 @@ local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
-local drawer, drawerToggle, coordinates
+local drawer, drawerToggle, coordinates, footer, fpsText
+local topHeight, bottomHeight = 26, 24
 local drawerEntries, drawerSeen = {}, {}
 local buttonDragInProgress = false
 local nativeHidden = {}
@@ -28,7 +29,7 @@ local function Number(value, fallback)
 end
 
 local function Size(value)
-    local reservedHeight = 44
+    local reservedHeight = topHeight + bottomHeight + 16
     -- Forever can render large map surfaces; screen bounds set the real maximum.
     local maximum = math.max(180, math.min(600, UIParent:GetWidth()-80, UIParent:GetHeight()-reservedHeight))
     return math.floor(math.max(180, math.min(maximum, Number(value, 300))) + 0.5)
@@ -142,7 +143,7 @@ end
 local function LayoutControls()
     CollectControls()
     db.size = Size(db.size)
-    holder:SetSize(db.size+8, db.size+30)
+    holder:SetSize(db.size+8, db.size+topHeight+bottomHeight+4)
     mapViewport:SetSize(db.size, db.size)
     local count = 0
     for _, control in ipairs(controls) do
@@ -352,7 +353,7 @@ end
 
 local function UpdateCoordinates()
     if not coordinates then return end
-    coordinates:SetShown(db.coordinates)
+    coordinates:SetShown(db.coordinates and db.size>=240)
     if not db.coordinates then return end
     local text="--, --"
     -- Instances and restricted map data must not cause errors or disturb the world map.
@@ -369,6 +370,41 @@ local function UpdateCoordinates()
     end)
     if ok and result then text=result end
     coordinates:SetText(text)
+end
+
+-- Embed TaliaaFPS's live frame, retaining its own update interval/rounding.
+-- Do not write its saved position or scale; standalone settings remain intact.
+local function LayoutFPS()
+    if not footer then return end
+    if InCombatLockdown() or InEditMode() then pending=true; return end
+    local frame = _G.TaliaaFPSFrame
+    if frame and not (frame.IsProtected and frame:IsProtected()) then
+        frame:SetParent(footer)
+        frame:ClearAllPoints()
+        frame:SetPoint("RIGHT",footer,"RIGHT",-8,0)
+        frame:SetSize(76,bottomHeight-2)
+        frame:SetScale(1)
+        frame:SetBackdrop(nil)
+        frame:EnableMouse(false)
+        frame:SetFrameStrata(holder:GetFrameStrata())
+        frame:SetFrameLevel(footer:GetFrameLevel()+1)
+        if frame.GetRegions then
+            for _,region in ipairs({frame:GetRegions()}) do
+                if region.IsObjectType and region:IsObjectType("FontString") then
+                    region:SetFontObject("GameFontHighlightSmall")
+                    region:SetTextColor(0.75,0.85,0.95)
+                end
+            end
+        end
+        frame:Show()
+        fpsText:Hide()
+    else fpsText:Show() end
+end
+
+local function UpdateFPS()
+    if not fpsText or not fpsText:IsShown() then return end
+    local fps = GetFramerate and GetFramerate() or 0
+    fpsText:SetText(string.format("FPS: %d",math.floor(fps+0.5)))
 end
 
 local function UpdateLabels()
@@ -425,6 +461,9 @@ local function Apply()
     header:EnableMouse(not db.locked)
     grip:SetShown(not db.locked)
     LayoutDrawer()
+    zone:SetWidth(math.max(60,db.size-64))
+    LayoutFPS()
+    UpdateFPS()
     pending, applying = false, false
     UpdateLabels()
     UpdateCoordinates()
@@ -540,7 +579,7 @@ local function Initialize()
     SuppressNativeChrome()
     header = CreateFrame("Frame", nil, holder)
     header:SetPoint("TOPLEFT", 4, -3)
-    header:SetPoint("TOPRIGHT", -28, -3)
+    header:SetPoint("TOPRIGHT", -4, -3)
     header:SetHeight(22)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
@@ -561,21 +600,40 @@ local function Initialize()
     header:SetScript("OnDragStop", StopMoving)
     holder.stopMoving = StopMoving
     Tooltip(header, "VoidMark Mini Map", "Drag this bar to move the map. /vmm opens settings.")
-    zone = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    zone = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     zone:SetPoint("CENTER", header, "CENTER", 0, 0)
+    zone:SetTextColor(0.88,0.81,0.98)
     zone:SetWidth(130)
     zone:SetWordWrap(false)
     local gear = CreateFrame("Button",nil,holder)
     gear:SetSize(22,22)
-    gear:SetNormalTexture("Interface\\Icons\\Trade_Engineering")
+    local gearLabel=gear:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    gearLabel:SetPoint("CENTER",0,2)
+    gearLabel:SetText("...")
+    gearLabel:SetTextColor(0.7,0.6,0.85)
     gear:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
     gear:SetScript("OnClick",ToggleOptions)
     gear:SetPoint("TOPRIGHT", -3, -3)
     Tooltip(gear, "VoidMark Mini Map", "Click to adjust map size, lock position, or reset.")
-    clock = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    clock:SetPoint("RIGHT", header, "RIGHT", -1, 0)
-    coordinates=holder:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-    coordinates:SetPoint("LEFT", header, "LEFT", 5, 0)
+    footer=CreateFrame("Frame",nil,holder,"BackdropTemplate")
+    footer:SetPoint("BOTTOMLEFT",holder,"BOTTOMLEFT",4,2)
+    footer:SetPoint("BOTTOMRIGHT",holder,"BOTTOMRIGHT",-4,2)
+    footer:SetHeight(bottomHeight)
+    footer:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"})
+    footer:SetBackdropColor(0.015,0.012,0.025,1)
+    local divider=footer:CreateTexture(nil,"ARTWORK")
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT")
+    divider:SetPoint("TOPRIGHT")
+    divider:SetColorTexture(0.38,0.22,0.52,0.8)
+    clock = footer:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    clock:SetPoint("LEFT", footer, "LEFT", 9, 0)
+    coordinates=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    coordinates:SetPoint("CENTER", footer, "CENTER", 0, 0)
+    coordinates:SetTextColor(0.65,0.65,0.72)
+    fpsText=footer:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    fpsText:SetPoint("RIGHT",footer,"RIGHT",-9,0)
+    fpsText:SetTextColor(0.75,0.85,0.95)
     drawer=CreateFrame("Frame","VoidMarkMiniMapDrawer",UIParent,"BackdropTemplate")
     drawer:SetFrameStrata("DIALOG")
     drawer:SetClampedToScreen(true)
@@ -670,11 +728,13 @@ VM:SetScript("OnEvent", function(_, event)
         if ready then Apply() end
     else UpdateLabels() end
 end)
-local elapsed, coordinateElapsed, drawerElapsed, rimElapsed = 0,0,0,0
+local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed = 0,0,0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 10 then elapsed = 0; UpdateLabels() end
     if not ready then return end
+    fpsElapsed=fpsElapsed+delta
+    if fpsElapsed>=0.25 then fpsElapsed=0; UpdateFPS() end
     coordinateElapsed=coordinateElapsed+delta
     drawerElapsed=drawerElapsed+delta
     rimElapsed=rimElapsed+delta
@@ -683,7 +743,7 @@ VM:SetScript("OnUpdate", function(_, delta)
     if drawerElapsed>=2 then
         drawerElapsed=0
         if InCombatLockdown() or InEditMode() then pending=true
-        else SuppressNativeChrome(); LayoutControls(); LayoutDrawer() end
+        else SuppressNativeChrome(); LayoutControls(); LayoutDrawer(); LayoutFPS() end
     end
     if coordinateElapsed==0 then SuppressNativeCoordinates() end
 end)
