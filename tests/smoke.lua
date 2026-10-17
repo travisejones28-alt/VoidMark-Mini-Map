@@ -100,12 +100,12 @@ assert(GameTimeFrame.parent~=VoidMarkMiniMapFrame and not GameTimeFrame:IsShown(
 command("size 420")
 assert(Minimap.width==420)
 command("size 99999")
-assert(Minimap.width==600)
+assert(Minimap.width==440)
 command("size nonsense")
-assert(Minimap.width==600)
+assert(Minimap.width==440)
 combat=true
 command("size 240")
-assert(Minimap.width==600,"Must not resize during combat")
+assert(Minimap.width==440,"Must not resize during combat")
 combat=false
 event("PLAYER_REGEN_ENABLED")
 assert(Minimap.width==240)
