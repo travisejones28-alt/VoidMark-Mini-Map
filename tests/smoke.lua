@@ -116,7 +116,8 @@ function GetCursorPosition() return cursorX,500 end
 local realPrint=print
 function print(text) messages[#messages+1]=text end
 VoidMarkMiniMapDB={size=0/0,point="garbage",x=math.huge,locked="bad",clock=true}
-if VMM_TEST_SAVED_SETTINGS then VoidMarkMiniMapDB.durability=false end
+if VMM_TEST_SAVED_SETTINGS then VoidMarkMiniMapDB.durability=false;VoidMarkMiniMapDB.latency=false end
+if VMM_TEST_OLD_FPS_OFF then VoidMarkMiniMapDB.fps=false end
 assert(loadfile("Footer.lua"))()
 assert(loadfile("Repair.lua"))()
 assert(loadfile("VoidMarkMiniMap.lua"))("VoidMarkMiniMap")
@@ -143,6 +144,10 @@ if VMM_TEST_SAVED_SETTINGS then
  assert(VoidMarkMiniMapDB.durability==false,"Reload/startup events lost durability preference")
  realPrint("PASS: saved durability-off preference survives initialization")
 end
+if VMM_TEST_OLD_FPS_OFF then
+ assert(VoidMarkMiniMapDB.fps==false and VoidMarkMiniMapDB.latency==false,'Old combined-off preference must migrate to both off')
+end
+if VMM_TEST_SAVED_SETTINGS then assert(VoidMarkMiniMapDB.latency==false,'Explicit saved latency preference was overwritten') end
 assert(GetMinimapShape()=="SQUARE")
 assert(Minimap:GetFrameStrata()=="BACKGROUND" and VoidMarkMiniMapFrame:GetFrameStrata()=="BACKGROUND", "Quest objectives should render above map")
 assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
@@ -596,7 +601,7 @@ controller.scripts.OnUpdate(controller,.25)
 assert(netCalls==previousNetCalls,'Server latency must not be sampled at FPS frequency')
 VoidMarkMiniMapOptions.fps:SetChecked(false)
 VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
-assert(not latency:IsShown(),'Performance toggle must also hide server latency')
+assert(latency:IsShown(),'FPS toggle must leave enabled server latency visible')
 VoidMarkMiniMapOptions.fps:SetChecked(true)
 VoidMarkMiniMapOptions.fps.scripts.OnClick(VoidMarkMiniMapOptions.fps)
 assert(latency:IsShown())
@@ -624,3 +629,34 @@ for _,size in ipairs({180,300,400,600})do
  for i=2,#ranges do assert(ranges[i][1]>=ranges[i-1][2],'Server stats overlap another footer item')end
 end
 realPrint('PASS: Forever world/server latency, five-second sampling, performance toggle, missing/restricted stats and resize bounds')
+
+-- Independent toggles work with both built-in and embedded FPS providers.
+GetNetStats=function()return 1,2,10,38 end
+command('size 600');controller.scripts.OnUpdate(controller,5)
+local nativeFPS=TaliaaFPSFrame
+local function setOption(key,value)
+ local check=VoidMarkMiniMapOptions[key];check:SetChecked(value);check.scripts.OnClick(check)
+end
+for _,useNative in ipairs({false,true})do
+ TaliaaFPSFrame=useNative and nativeFPS or nil
+ for _,fpsEnabled in ipairs({false,true})do for _,latencyEnabled in ipairs({false,true})do
+  setOption('fps',fpsEnabled);setOption('latency',latencyEnabled)
+  controller.scripts.OnUpdate(controller,5)
+  assert(latency:IsShown()==latencyEnabled,'Latency display must honor its own option')
+  assert(fallback:IsShown()==(fpsEnabled and not useNative),'Built-in FPS toggle is coupled to latency')
+  if useNative then assert(nativeFPS:IsShown()==fpsEnabled,'Embedded FPS toggle is coupled to latency')end
+  assert(VoidMarkMiniMapDB.fps==fpsEnabled and VoidMarkMiniMapDB.latency==latencyEnabled)
+  local calls=netCalls
+  if not latencyEnabled then
+   GetNetStats=function()netCalls=netCalls+1;return 1,2,10,38 end
+   controller.scripts.OnUpdate(controller,5)
+   assert(netCalls==calls,'Disabled latency must not poll network stats')
+  end
+ end end
+end
+setOption('fps',false);setOption('latency',true)
+local x=latency.point[4]
+assert(x>=0 and x+latency.width<=600,'Latency-only layout escaped minimap')
+setOption('latency',false);setOption('fps',true)
+assert(not latency:IsShown() and nativeFPS:IsShown(),'FPS-only mode must hide latency')
+realPrint('PASS: FPS-only, latency-only, both/neither with built-in and embedded providers; independent saved toggles')

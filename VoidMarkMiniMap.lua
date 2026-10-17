@@ -19,7 +19,7 @@ local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
-local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, purple = true,
+local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, latency = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -45,6 +45,10 @@ end
 local function LoadSettings()
     if type(VoidMarkMiniMapDB) ~= "table" then VoidMarkMiniMapDB = {} end
     db = VoidMarkMiniMapDB
+    -- Preserve the previous combined toggle on first upgrade only.
+    if type(db.latency)~="boolean" then
+        if type(db.fps)=="boolean" then db.latency=db.fps else db.latency=defaults.latency end
+    end
     for key, value in pairs(defaults) do
         if type(db[key]) ~= type(value) then db[key] = value end
     end
@@ -472,7 +476,7 @@ LayoutFooter = function()
         {key="time",text=clock,enabled=db.clock or db.localClock,full=clockFull or "",compact=clockCompact or "",icon=true},
         {key="coordinates",text=coordinates,enabled=db.coordinates,icon=true},
         {key="durability",text=durabilityText,enabled=db.durability,full="Durability: "..(durabilityPercent and string.format("%d%%",math.floor(durabilityPercent+.5)) or "--"),icon=true},
-        {key="fps",text=fpsText,enabled=db.fps},
+        {key="fps",text=fpsText,enabled=db.fps or db.latency},
     }
     local fpsRegions={}
     if embeddedFPS and embeddedFPS.GetRegions then
@@ -482,7 +486,7 @@ LayoutFooter = function()
             end
         end
     end
-    local signature={tostring(db.size),tostring(embeddedFPS),latencyText:GetText() or ""}
+    local signature={tostring(db.size),tostring(embeddedFPS),latencyText:GetText() or "",tostring(db.fps),tostring(db.latency)}
     for _,e in ipairs(entries) do
         e.full=e.full or e.text:GetText() or ""
         signature[#signature+1]=tostring(e.enabled)..":"..e.full
@@ -515,12 +519,13 @@ LayoutFooter = function()
     local font=latencyText:GetFont()
     if font then latencyText:SetFont(font,size,"OUTLINE") end
     latencyText:SetWidth(0);latencyText:SetWordWrap(false)
-    local latencyWidth=latencyText:GetStringWidth()
-    local fpsWidth=entries[4].width
-    entries[4].width=fpsWidth+6+latencyWidth
+    local latencyWidth=db.latency and latencyText:GetStringWidth() or 0
+    local fpsWidth=db.fps and entries[4].width or 0
+    local performanceGap=db.fps and db.latency and 6 or 0
+    entries[4].width=fpsWidth+performanceGap+latencyWidth
     entries[4].compactWidth=entries[4].width
     local plan=Footer.Plan(db.size,entries)
-    latencyText:SetShown(not not plan.items[4])
+    latencyText:SetShown(db.latency and not not plan.items[4])
     local previous
     for i,e in ipairs(entries) do
         local item=plan.items[i]
@@ -533,7 +538,7 @@ LayoutFooter = function()
                 repairHover:SetSize(item.width,bottomHeight-2)
             elseif HideDurabilityTooltip then HideDurabilityTooltip() end
         end
-        e.text:SetShown(shown and not (e.key=="fps" and embeddedFPS))
+        e.text:SetShown(shown and (e.key~="fps" or (db.fps and not embeddedFPS)))
         if footerIcons[i] then footerIcons[i]:SetShown(shown and not not item.icon) end
         if footerSeparators[i] then footerSeparators[i]:Hide() end
         if item then
@@ -552,7 +557,7 @@ LayoutFooter = function()
             if e.key=="fps" then
                 e.text:SetWidth(fpsWidth)
                 latencyText:ClearAllPoints()
-                latencyText:SetPoint("LEFT",footer,"LEFT",item.x+fpsWidth+6,0)
+                latencyText:SetPoint("LEFT",footer,"LEFT",item.x+fpsWidth+performanceGap,0)
                 latencyText:SetWidth(latencyWidth)
             end
             if e.key=="fps" and embeddedFPS then
@@ -565,7 +570,7 @@ LayoutFooter = function()
             end
         end
     end
-    if embeddedFPS then embeddedFPS:SetShown(not not plan.items[4]) end
+    if embeddedFPS then embeddedFPS:SetShown(db.fps and not not plan.items[4]) end
 end
 
 HideDurabilityTooltip = function()
@@ -615,6 +620,7 @@ local function UpdateOptions()
     options.localClock:SetChecked(db.localClock)
     options.clock24:SetChecked(db.clock24)
     options.fps:SetChecked(db.fps)
+    options.latency:SetChecked(db.latency)
     options.durability:SetChecked(db.durability)
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
@@ -673,7 +679,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 520)
+        options:SetSize(390, 552)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -715,18 +721,19 @@ local function ToggleOptions()
         options.purple = Check("Colored border", -185, "purple")
         options.coordinates = Check("Show player coordinates", -217, "coordinates")
         options.drawer = Check("Place addon buttons around map", -249, "drawer")
-        options.fps = Check("Show FPS / server latency", -281, "fps")
+        options.fps = Check("Show FPS", -281, "fps")
         options.localClock = Check("Show local clock", -313, "localClock")
         options.clock24 = Check("Use 24-hour time (off: 12-hour AM/PM)", -345, "clock24")
         options.durability = Check("Show equipment durability", -377, "durability")
+        options.latency = Check("Show server latency (MS)", -409, "latency")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
-        options.accent:SetPoint("TOPLEFT",22,-418)
+        options.accent:SetPoint("TOPLEFT",22,-450)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-450)
-        compatibility:SetPoint("TOPRIGHT",-22,-450)
+        compatibility:SetPoint("TOPLEFT",22,-482)
+        compatibility:SetPoint("TOPRIGHT",-22,-482)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
@@ -993,7 +1000,7 @@ VM:SetScript("OnUpdate", function(_, delta)
     durabilityElapsed=durabilityElapsed+delta
     if durabilityElapsed>=5 then durabilityElapsed=0; if db.durability then UpdateDurability() end end
     latencyElapsed=latencyElapsed+delta
-    if latencyElapsed>=5 then latencyElapsed=0; if db.fps then UpdateLatency() end end
+    if latencyElapsed>=5 then latencyElapsed=0; if db.latency then UpdateLatency() end end
     fpsElapsed=fpsElapsed+delta
     if fpsElapsed>=0.25 then fpsElapsed=0; UpdateFPS() end
     coordinateElapsed=coordinateElapsed+delta

@@ -41,3 +41,7 @@ Validation: all 15 repair and 10 footer regression groups, existing startup/conf
 ## 0.2.3 requested server latency
 
 Added MS alongside FPS, using the fourth GetNetStats result as in the supplied Forever ImproveAny pingframe implementation. The old footer had no latency display. The existing performance setting controls both. Added protected/missing-value handling, slow sampling and combined measured layout, retaining native FPS embedding. Tests cover world vs home latency, restricted/invalid data, sample cadence, toggle behavior and narrow/wide footer bounds. No changes to route, map geometry or repair calculation APIs.
+
+## 0.2.4 independent FPS/latency settings
+
+Split the old combined checkbox into independently saved FPS and server-latency choices. Existing combined-off preferences migrate to both off; explicit saved latency values survive later FPS toggles and startup. The existing performance layout budgets only enabled content and native FPS embedding follows only its own toggle. Regression coverage includes all eight combinations across two FPS providers, independent startup settings, old preference migration and disabled network sampling.

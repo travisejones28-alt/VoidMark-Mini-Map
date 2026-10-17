@@ -1,6 +1,6 @@
 # VoidMark Mini Map
 
-Current release: **0.2.3** (Forever Interface **16001**).
+Current release: **0.2.4** (Forever Interface **16001**).
 
 Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
 
@@ -36,6 +36,14 @@ This enlarges the actual minimap frame, not the underlying terrain visibility ra
 Run `python tests/run.py` with `lupa==2.8` installed. It compiles addon Lua under stock Lua 5.1, checks the Interface 16001 TOC/load order, tests footer calculations/layout, and runs normal, saved-durability-off, Leatrix and MoveAny startup variants. The existing icon collection, nine-angle Nexus positioning, combat deferral, dragging, sizing, zoom, native chrome suppression and FPS embedding tests remain active. `python tools/package.py --check` verifies the distribution ZIP against source.
 
 The shared four-addon mocked-client integration also passed locally in both Nexus/Mini Map load orders. These tests inspect handlers, calculated bounds and frame attributes; they do not establish actual Forever rendering, protected execution, repair-event delivery or third-party font appearance.
+
+## 0.2.4 independent performance options
+
+`/vmini` now has separate **Show FPS** and **Show server latency (MS)** checkboxes. Show either, both, or neither; each preference is saved separately. On the first upgrade, a character's old combined FPS preference initializes latency to the same value, preserving the previous visible/hidden choice. An explicitly saved latency choice is never overwritten by the FPS setting.
+
+The responsive performance area only reserves space for enabled metrics. Built-in and TaliaaFPS displays respect the FPS option independently; disabling latency stops its five-second network sampling. Other footer preferences and repair behavior are unchanged.
+
+Tests exercise every toggle combination with built-in/embedded FPS, saved latency-off startup, migration of old combined-off preferences, and disabled-latency sampling. In game, verify the four combinations, resize the map, then `/reload` to confirm persistence.
 
 ## 0.2.3 server latency
 
