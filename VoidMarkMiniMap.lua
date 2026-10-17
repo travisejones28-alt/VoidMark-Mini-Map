@@ -469,6 +469,7 @@ local function Apply()
     Minimap:ClearAllPoints()
     -- Use native unit scaling: applying a 2x scale also makes the player arrow 2x.
     -- Allow the map texture and its internal icons to keep their normal sizes.
+    Minimap:SetFrameStrata("BACKGROUND")
     Minimap:SetScale(1)
     Minimap:SetSize(db.size,db.size)
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
@@ -585,11 +586,12 @@ local function Initialize()
         end
     end
     holder = CreateFrame("Frame", "VoidMarkMiniMapFrame", UIParent, "BackdropTemplate")
-    holder:SetFrameStrata("LOW")
+    holder:SetFrameStrata("BACKGROUND")
     holder:SetMovable(true)
     holder:SetClampedToScreen(true)
     Backdrop(holder)
     Minimap:SetParent(holder)
+    Minimap:SetFrameStrata("BACKGROUND")
     Minimap:SetScale(1)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
     mapViewport = CreateFrame("Frame",nil,holder)

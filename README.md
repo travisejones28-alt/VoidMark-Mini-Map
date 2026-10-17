@@ -94,3 +94,7 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 - Removed the black header strip; the outlined zone name now sits directly over the terrain, with the settings button at the upper right. The zone area still supports dragging while unlocked.
 - Added independent server and local clock toggles in `/vmm`. Enable either, both, or neither; `S` identifies server time and `L` identifies the computer's local time. Existing server-clock preference is preserved.
 - Clock labels refresh each second. Footer coordinates move into available space and hide if both clocks plus FPS would crowd them on smaller maps.
+
+## 0.1.9
+
+- Put the minimap and its holder in the background UI layer so quest objectives and normal panels render above the terrain. The settings dialog keeps its own higher layer.

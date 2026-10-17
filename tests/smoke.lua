@@ -123,6 +123,7 @@ if VMM_TEST_CONFLICT then
 end
 assert(Minimap.width==300 and Minimap.height==300)
 assert(GetMinimapShape()=="SQUARE")
+assert(Minimap:GetFrameStrata()=="BACKGROUND" and VoidMarkMiniMapFrame:GetFrameStrata()=="BACKGROUND", "Quest objectives should render above map")
 assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
 assert(VoidMarkMiniMapDB.locked==true)
 assert(MinimapCluster.Tracking.parent==VoidMarkMiniMapFrame)
