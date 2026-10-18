@@ -10,6 +10,7 @@ local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
+local mailButton
 local drawer, drawerToggle, coordinates, footer, fpsText, latencyText
 local topHeight, bottomHeight = 2, 32
 local drawerEntries, drawerSeen = {}, {}
@@ -138,9 +139,6 @@ local function CollectControls()
     end
     Add(MiniMapTracking)
     Add(MiniMapTrackingButton)
-    -- Out-of-combat protected native controls can be moved; do not skip the mail frame.
-    -- Mail has a composite envelope/seal texture; never resize it with addon buttons.
-    Add(MiniMapMailFrame)
     Add(MiniMapWorldMapButton)
     -- Calendar and Forever DielFrame day/night chrome are suppressed separately.
     Add(QueueStatusMinimapButton)
@@ -149,7 +147,6 @@ local function CollectControls()
     if MinimapCluster then
         Add(MinimapCluster.Tracking)
         Add(MinimapCluster.TrackingButton)
-        Add(MinimapCluster.MailFrame)
         Add(MinimapCluster.InstanceDifficulty)
     end
 end
@@ -163,8 +160,7 @@ local function LayoutControls()
     for _, control in ipairs(controls) do
         if control:IsShown() then
             local dimension = math.max(control:GetWidth(),control:GetHeight(),1)
-            local isMail = control == MiniMapMailFrame or (MinimapCluster and control == MinimapCluster.MailFrame)
-            local scale = isMail and 1 or math.min(1,24/dimension)
+            local scale = math.min(1,24/dimension)
             control:SetScale(scale)
             control:ClearAllPoints()
             local point, relative, relativePoint, x, y = RimPoint(count)
@@ -348,11 +344,11 @@ local function SuppressNativeChrome()
     for _, name in ipairs({"MinimapZoomIn", "MinimapZoomOut", "MiniMapZoomIn", "MiniMapZoomOut",
         "GameTimeFrame", "GameTimeTexture", "TimeManagerClockButton", "MiniMapCalendarButton",
         "GameTimeCalendarInvitesTexture", "GameTimeCalendarInvitesGlow", "GameTimeCalendarEventAlarmTexture",
-        "AddonCompartmentFrame",
+        "AddonCompartmentFrame", "MiniMapMailFrame",
         "MinimapBorder", "MinimapBorderTop", "MinimapBackdrop", "MinimapZoneTextButton", "MinimapZoneText",
         "MinimapClusterBorderTop"}) do Hide(_G[name]) end
     WalkMinimap(function(frame)
-        for _, key in ipairs({"ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
+        for _, key in ipairs({"MailFrame", "ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
             "Calendar", "CalendarButton", "GameTimeFrame", "GameTimeTexture", "DielFrame",
             "AddonCompartmentFrame", "AddonCompartment", "ZoneTextButton", "BorderTop"}) do
             Hide(frame[key])
@@ -368,6 +364,41 @@ local function SuppressNativeChrome()
             end
         end
     end)
+end
+
+-- Independent mail notification: use Blizzard mail APIs without its minimap frame.
+local function UpdateMail()
+    if not mailButton then return end
+    local waiting = HasNewMail and HasNewMail()
+    mailButton:SetShown(not not waiting)
+end
+
+local function CreateMailButton()
+    mailButton = CreateFrame("Button", "VoidMarkMiniMapMailButton", holder)
+    mailButton:SetSize(24, 24)
+    mailButton:SetFrameStrata(holder:GetFrameStrata())
+    mailButton:SetFrameLevel(holder:GetFrameLevel()+10)
+    -- The left rim stays independent of Blizzard HUD Edit Mode and scales with our map.
+    mailButton:SetPoint("TOPLEFT", mapViewport, "TOPLEFT", -29, -25)
+    local icon = mailButton:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    icon:SetTexture("Interface\\Minimap\\Tracking\\Mailbox")
+    mailButton:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText(HAVE_MAIL or "You have unread mail", 1, 0.82, 0)
+        if GetLatestThreeSenders then
+            local sender1, sender2, sender3 = GetLatestThreeSenders()
+            for _, sender in ipairs({sender1, sender2, sender3}) do
+                if type(sender) == "string" and sender ~= "" then
+                    GameTooltip:AddLine(sender, 1, 1, 1)
+                end
+            end
+        end
+        GameTooltip:Show()
+    end)
+    mailButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    UpdateMail()
 end
 
 local function UpdateCoordinates()
@@ -794,6 +825,7 @@ local function Initialize()
     VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
     VM.hiddenChrome:Hide()
     SuppressNativeChrome()
+    CreateMailButton()
     header = CreateFrame("Frame", nil, holder)
     header:SetPoint("TOPLEFT",mapViewport,"TOPLEFT",0,0)
     header:SetPoint("TOPRIGHT",mapViewport,"TOPRIGHT",0,0)
@@ -972,9 +1004,12 @@ end
 for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
     "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "ADDON_LOADED",
+    "UPDATE_PENDING_MAIL", "MAIL_INBOX_UPDATE",
     "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED", "MERCHANT_SHOW", "MERCHANT_UPDATE", "PLAYER_DEAD", "PLAYER_UNGHOST"}) do VM:RegisterEvent(event) end
 VM:SetScript("OnEvent", function(_, event)
-    if event == "MERCHANT_SHOW" then
+    if event == "UPDATE_PENDING_MAIL" or event == "MAIL_INBOX_UPDATE" then
+        UpdateMail()
+    elseif event == "MERCHANT_SHOW" then
         merchantOpen=true;repairPending=true
         -- Capture the opening quote promptly, without intercepting auto-repair addons.
         if ready and repair then
@@ -987,13 +1022,13 @@ VM:SetScript("OnEvent", function(_, event)
         if event=="MERCHANT_CLOSED" then merchantOpen=false end
         repairPending=true
         if ready then UpdateDurability() end
-    elseif event == "PLAYER_LOGIN" then Initialize()
+    elseif event == "PLAYER_LOGIN" then Initialize(); UpdateMail()
     elseif event == "PLAYER_REGEN_DISABLED" then
         if holder then holder.stopMoving(); holder.stopResizing() end
     elseif event == "PLAYER_REGEN_ENABLED" and pending then Initialize()
     elseif event == "PLAYER_ENTERING_WORLD" or event == "DISPLAY_SIZE_CHANGED" or event == "UI_SCALE_CHANGED"
         or event == "ADDON_LOADED" then
-        if ready then Apply();repairPending=true end
+        if ready then Apply(); UpdateMail(); repairPending=true end
     else UpdateLabels() end
 end)
 local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed, durabilityElapsed, latencyElapsed = 0,0,0,0,0,0,0
