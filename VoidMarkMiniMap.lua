@@ -707,7 +707,6 @@ local function UpdateOptions()
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
-    options.rotate:SetChecked(db.rotate)
     options.headerBelow:SetChecked(db.headerBelow)
     options.iconScale:SetValue(db.iconScale)
     options.iconText:SetText(Minimap.SetIconScale and ("Native icon scale: "..math.floor(db.iconScale*100+.5).."%") or "Native icon scale: unavailable on this client")
@@ -762,6 +761,7 @@ local function Apply()
     if applying then return end
     applying = true
     db.size = Size(db.size)
+    db.rotate = false -- Migrate away from the retired rotation setting.
     SuppressNativeChrome()
     SuppressNativeCoordinates()
     LayoutControls()
@@ -790,25 +790,13 @@ local function Apply()
     local getCVar=(C_CVar and C_CVar.GetCVar) or GetCVar
     local setCVar=(C_CVar and C_CVar.SetCVar) or SetCVar
     if getCVar and setCVar then
-        local wanted=db.rotate and "1" or "0"
+        local wanted="0"
         if getCVar("rotateMinimap")~=wanted then setCVar("rotateMinimap",wanted) end
     end
     -- The native minimap renderer ignores ScrollFrame child clipping on Forever.
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
     -- Forever-compatible native square mask, matching SquareForeverMinimap.
     Minimap:SetMaskTexture(squareMaskPath)
-    -- Forever's native minimap can retain stale terrain tiles after changing
-    -- its rendering geometry or rotateMinimap. Force the same redraw used by
-    -- ForeverSquareMinimap after its geometry updates.
-    if db.rotate and Minimap.GetZoom and Minimap.SetZoom and Minimap.GetZoomLevels then
-        local zoom = Minimap:GetZoom()
-        local maxZoom = Minimap:GetZoomLevels() - 1
-        if type(zoom)=="number" and type(maxZoom)=="number" and maxZoom>0 then
-            local alternate = zoom < maxZoom and zoom+1 or zoom-1
-            Minimap:SetZoom(alternate)
-            Minimap:SetZoom(zoom)
-        end
-    end
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
         local color=accents[db.accent]
@@ -895,7 +883,6 @@ local function ToggleOptions()
         compatibility:SetPoint("TOPLEFT",22,-620)
         compatibility:SetPoint("TOPRIGHT",-22,-620)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
-        options.rotate=Check("Rotate minimap (native square)",-484,"rotate")
         options.headerBelow=Check("Zone header below map",-516,"headerBelow")
         options.iconText=options:CreateFontString(nil,"OVERLAY","GameFontHighlight")
         options.iconText:SetPoint("TOPLEFT",22,-558)
@@ -911,7 +898,6 @@ local function ToggleOptions()
         end)
         Tooltip(options.iconScale,"Native map icons","Scales supported quest/POI indicators, not terrain or addon buttons. Requires the client SetIconScale API.")
         Tooltip(sizeSlider,"Visible map size","Changes terrain width and height in UI units without scaling buttons or the player arrow.")
-        Tooltip(options.rotate,"Rotation","Uses native map rotation with the standard square mask.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
         options.status:SetPoint("BOTTOMRIGHT", -14, 14)
