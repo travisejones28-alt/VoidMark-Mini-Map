@@ -772,14 +772,17 @@ local function Apply()
     holder:ClearAllPoints()
     holder:SetPoint(db.point, UIParent, db.point, db.x, db.y)
     -- Match map geometry to the viewport, without scaling the player arrow.
-    Minimap:SetParent(holder)
+    -- Render rotating terrain behind a square clipping viewport. The diagonal
+    -- of the viewport must fit inside the rendered map at every heading.
+    Minimap:SetParent(mapViewport)
     ReleaseNativeHitRegions()
     Minimap:ClearAllPoints()
     -- Use native unit scaling: applying a 2x scale also makes the player arrow 2x.
     -- Allow the map texture and its internal icons to keep their normal sizes.
     Minimap:SetFrameStrata("BACKGROUND")
     Minimap:SetScale(1)
-    Minimap:SetSize(db.size,db.size)
+    local renderSize = db.rotate and math.ceil(db.size * math.sqrt(2)) + 2 or db.size
+    Minimap:SetSize(renderSize,renderSize)
     if Minimap.SetIconScale then Minimap:SetIconScale(db.iconScale) end
     local getCVar=(C_CVar and C_CVar.GetCVar) or GetCVar
     local setCVar=(C_CVar and C_CVar.SetCVar) or SetCVar
@@ -942,6 +945,7 @@ local function Initialize()
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-(topHeight+2))
     mapViewport:SetSize(db.size,db.size)
     mapViewport:EnableMouse(false)
+    if mapViewport.SetClipsChildren then mapViewport:SetClipsChildren(true) end
     _G.GetMinimapShape = function() return "SQUARE" end
     VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
     VM.hiddenChrome:Hide()
