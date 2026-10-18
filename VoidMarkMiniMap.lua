@@ -9,6 +9,8 @@ local ShowDurabilityTooltip, HideDurabilityTooltip
 local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
+local restoringSquareMask = false
+local squareMaskPath = "Interface\\ChatFrame\\ChatFrameBackground"
 local controls, seenControls = {}, {}
 local mailButton
 local layoutDirty, rimDirty, rimApplying = false, true, false
@@ -744,7 +746,18 @@ local function InstallOwnershipHooks()
             if type(frame[method])=="function" then hooksecurefunc(frame,method,Dirty) end
         end
     end
-    Watch(Minimap,{"SetParent","SetPoint","SetSize","SetScale","SetIconScale","SetMaskTexture"})
+    Watch(Minimap,{"SetParent","SetPoint","SetSize","SetScale","SetIconScale"})
+    -- Forever skin restores its round mask asynchronously after rotation toggles.
+    -- Immediately replace external mask changes without recursively hooking ours.
+    if Minimap and type(Minimap.SetMaskTexture)=="function" then
+        hooksecurefunc(Minimap,"SetMaskTexture",function()
+            if restoringSquareMask or not ready then return end
+            if InCombatLockdown() or InEditMode() then layoutDirty=true; return end
+            restoringSquareMask=true
+            Minimap:SetMaskTexture(squareMaskPath)
+            restoringSquareMask=false
+        end)
+    end
     -- Forever (Camelot) updates the mask and compass underlay in a CVar callback
     -- after the rotation setting changes, independently of HUD layout methods.
     Watch(MinimapCluster,{"EnableMouse","Layout","SetIconScale","SetRotateMinimap","SetHeaderUnderneath","UpdateMinimapConfig"})
@@ -793,7 +806,9 @@ local function Apply()
     -- The native minimap renderer ignores ScrollFrame child clipping on Forever.
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
     -- Native square mask: do not overscan or rotate a secondary mask.
-    Minimap:SetMaskTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    restoringSquareMask=true
+    Minimap:SetMaskTexture(squareMaskPath)
+    restoringSquareMask=false
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
         local color=accents[db.accent]
