@@ -11,10 +11,11 @@ local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, do
 local ready, pending, applying = false, false, false
 local controls, seenControls = {}, {}
 local mailButton
+local layoutDirty, rimDirty, rimApplying = false, true, false
+local watched = {}
 local drawer, drawerToggle, coordinates, footer, fpsText, latencyText
-local topHeight, bottomHeight = 2, 32
+local topHeight, bottomHeight = 24, 32
 local drawerEntries, drawerSeen = {}, {}
-local buttonDragInProgress = false
 local nativeHidden = {}
 local function InEditMode()
     return EditModeManagerFrame and EditModeManagerFrame.IsShown and EditModeManagerFrame:IsShown()
@@ -22,6 +23,7 @@ end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
 local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, latency = true, purple = true,
     coordinates = false, drawer = true, accent = "purple",
+    iconScale = 1, rotate = false, headerBelow = false,
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
     RIGHT=true, BOTTOMLEFT=true, BOTTOM=true, BOTTOMRIGHT=true }
@@ -53,6 +55,8 @@ local function LoadSettings()
     for key, value in pairs(defaults) do
         if type(db[key]) ~= type(value) then db[key] = value end
     end
+    if type(db.rimPositions)~="table" then db.rimPositions={} end
+    db.iconScale = math.max(.5, math.min(2, Number(db.iconScale, 1)))
     db.size = Size(db.size)
     db.point = points[db.point] and db.point or defaults.point
     db.x = math.max(-UIParent:GetWidth(), math.min(UIParent:GetWidth(), Number(db.x, -35)))
@@ -130,7 +134,7 @@ end
 
 local function CollectControls()
     local function Add(control)
-        if not control or seenControls[control] then return end
+        if not control or seenControls[control] or (control.IsProtected and control:IsProtected()) then return end
         seenControls[control] = true
         controls[#controls+1] = control
         control:SetParent(holder)
@@ -138,7 +142,7 @@ local function CollectControls()
         control:SetFrameLevel(holder:GetFrameLevel()+8)
     end
     Add(MiniMapTracking)
-    Add(MiniMapTrackingButton)
+    if not MiniMapTracking then Add(MiniMapTrackingButton) end
     Add(MiniMapWorldMapButton)
     -- Calendar and Forever DielFrame day/night chrome are suppressed separately.
     Add(QueueStatusMinimapButton)
@@ -146,7 +150,7 @@ local function CollectControls()
     Add(MiniMapBattlefieldFrame)
     if MinimapCluster then
         Add(MinimapCluster.Tracking)
-        Add(MinimapCluster.TrackingButton)
+        if not MinimapCluster.Tracking then Add(MinimapCluster.TrackingButton) end
         Add(MinimapCluster.InstanceDifficulty)
     end
 end
@@ -159,6 +163,7 @@ local function LayoutControls()
     local count = 0
     for _, control in ipairs(controls) do
         if control:IsShown() then
+            control:SetParent(holder)
             local dimension = math.max(control:GetWidth(),control:GetHeight(),1)
             local scale = math.min(1,24/dimension)
             control:SetScale(scale)
@@ -173,29 +178,34 @@ end
 
 local function LayoutDrawer()
     if not drawer then return end
-    if InCombatLockdown() or InEditMode() or buttonDragInProgress then pending = true; return end
+    if InCombatLockdown() or InEditMode() then pending = true; return end
     AdaptNexusShape()
-    local function Add(button, disableMouseDrag, nexusMouseDrag)
+    local function Add(button, key)
         if not button or drawerSeen[button] or (button.IsProtected and button:IsProtected()) then return end
         if not button.GetParent or not button.GetNumPoints then return end
         local entry = {button=button, parent=button:GetParent(), scale=button:GetScale(),
-            strata=button:GetFrameStrata(),level=button:GetFrameLevel(),points={},scripts={}}
+            strata=button:GetFrameStrata(),level=button:GetFrameLevel(),points={}}
         for i=1,button:GetNumPoints() do entry.points[i]={button:GetPoint(i)} end
-        -- While controlled by the rim, do not allow icon libraries to drag
-        -- these buttons back onto the minimap. Restore handlers on release.
-        if disableMouseDrag then
-            local scripts = {"OnDragStart", "OnDragStop"}
-            -- Nexus implements drag with mouse-down + OnUpdate, not OnDragStart.
-            -- Only its confirmed button uses this override; preserve other addons' mouse scripts.
-            if nexusMouseDrag then
-                scripts[#scripts+1]="OnMouseDown"
-                scripts[#scripts+1]="OnMouseUp"
-                scripts[#scripts+1]="OnUpdate"
-            end
-            for _,name in ipairs(scripts) do
-                entry.scripts[#entry.scripts+1]={name,button:GetScript(name)}
-                button:SetScript(name,nil)
-            end
+        -- Preserve native click/drag/hover scripts. Reproject native drag anchors
+        -- rather than disabling library-specific dragging implementations.
+        entry.key=key or (button.GetName and button:GetName())
+        if hooksecurefunc and not button.VoidMarkRimHook then
+            button.VoidMarkRimHook=true
+            hooksecurefunc(button,"SetPoint",function(self,point,relative,relativePoint,x,y)
+                if not ready or not db.drawer or applying or rimApplying then return end
+                if point~="CENTER" or relative~=Minimap or relativePoint~="CENTER" then return end
+                if type(x)~="number" or type(y)~="number" then return end
+                local extent=math.max(math.abs(x),math.abs(y))
+                if extent==0 or extent==math.huge or extent~=extent then return end
+                for _,owned in ipairs(drawerEntries) do
+                    if owned.button==self then
+                        owned.position={x/extent,y/extent}
+                        if owned.key then db.rimPositions[owned.key]=owned.position end
+                        rimDirty=true
+                        break
+                    end
+                end
+            end)
         end
         drawerSeen[button]=true
         drawerEntries[#drawerEntries+1]=entry
@@ -212,7 +222,6 @@ local function LayoutDrawer()
             button:SetScale(entry.scale)
             button:ClearAllPoints()
             for _,point in ipairs(entry.points) do button:SetPoint(unpack(point)) end
-            for _,script in ipairs(entry.scripts) do button:SetScript(script[1],script[2]) end
         end
         drawerEntries,drawerSeen={},{}
         drawer:Hide(); drawerToggle:Hide()
@@ -224,21 +233,32 @@ local function LayoutDrawer()
         table.sort(names)
         for _,name in ipairs(names) do
             local button=lib:GetMinimapButton(name)
-            Add(button,true,button==_G.VoidMarkNexusMinimap)
+            Add(button,"LibDBIcon:"..name)
         end
     end
-    Add(_G.VoidMarkNexusMinimap,true,true)
-    Add(_G.VoidMarkMinimapButton,true)
+    Add(_G.VoidMarkNexusMinimap,"VoidMarkNexus")
+    Add(_G.VoidMarkMinimapButton,"VoidMark")
+    Add(_G.VoidMarkMarketMinimapButton,"VoidMarkMarket")
     local count=0
     for _,control in ipairs(controls) do if control:IsShown() then count=count+1 end end
     for _,entry in ipairs(drawerEntries) do
         local button=entry.button
         if button:IsShown() then
+            button:SetParent(holder)
             button:SetFrameStrata(holder:GetFrameStrata())
             local scale=math.min(1,24/math.max(button:GetWidth(),button:GetHeight(),1))
             button:SetScale(scale)
             button:ClearAllPoints()
             local point,relative,relativePoint,x,y=RimPoint(count)
+            local pos=entry.position or (entry.key and db.rimPositions[entry.key])
+            if type(pos)=="table" then
+                local px,py=Number(pos[1],0),Number(pos[2],0)
+                local extent=math.max(math.abs(px),math.abs(py))
+                if extent>0 then
+                    relative,relativePoint=mapViewport,"CENTER"
+                    x,y=px/extent*(db.size/2+16),py/extent*(db.size/2+16)
+                end
+            end
             button:SetPoint("CENTER",relative,relativePoint,x/scale,y/scale)
             count=count+1
         end
@@ -247,34 +267,32 @@ local function LayoutDrawer()
     drawerToggle:Hide()
 end
 
--- Blizzard or a button library may write circular anchors again after we move
--- a button. Periodically reassert the square layout, including after dragging.
+-- Coalesce button-library anchor writes and visibility changes into one layout.
+-- Hooks never reposition synchronously and are inert while our own layout runs.
+local function WatchRim(button)
+    if not button or watched[button] or not hooksecurefunc then return end
+    watched[button]=true
+    local function Dirty()
+        if ready and not rimApplying and not applying then rimDirty=true end
+    end
+    for _,method in ipairs({"SetPoint","SetScale","SetParent"}) do
+        if type(button[method])=="function" then hooksecurefunc(button,method,Dirty) end
+    end
+    if button.HookScript then
+        button:HookScript("OnShow",Dirty)
+        button:HookScript("OnHide",Dirty)
+    end
+end
+
 local function RefreshRim()
-    if not ready or InCombatLockdown() or InEditMode() then return end
-    -- Discover native mail controls that Blizzard creates after initialization.
-    CollectControls()
-    local count = 0
-    for _,control in ipairs(controls) do
-        if control:IsShown() then
-            local scale=math.max(0.01,Number(control:GetScale(),1))
-            local point,rel,relpoint,x,y=RimPoint(count)
-            control:ClearAllPoints()
-            control:SetPoint("CENTER",rel,relpoint,x/scale,y/scale)
-            count=count+1
-        end
-    end
-    if db.drawer then
-        for _,entry in ipairs(drawerEntries) do
-            local button=entry.button
-            if button:IsShown() and not (button.IsProtected and button:IsProtected()) then
-                local scale=math.max(0.01,Number(button:GetScale(),1))
-                local point,rel,relpoint,x,y=RimPoint(count)
-                button:ClearAllPoints()
-                button:SetPoint("CENTER",rel,relpoint,x/scale,y/scale)
-                count=count+1
-            end
-        end
-    end
+    if not ready or InCombatLockdown() or InEditMode() then pending=true; return end
+    rimApplying=true
+    LayoutControls()
+    LayoutDrawer()
+    for _,button in ipairs(controls) do WatchRim(button) end
+    for _,entry in ipairs(drawerEntries) do WatchRim(entry.button) end
+    rimApplying=false
+    rimDirty=false
 end
 
 local function RecoverPosition()
@@ -339,16 +357,17 @@ local function SuppressNativeChrome()
             end
         end
         frame:Hide()
+        -- Do not hide containers: they can own addon buttons or native overlays.
         if frame.SetParent then frame:SetParent(VM.hiddenChrome) end
     end
     for _, name in ipairs({"MinimapZoomIn", "MinimapZoomOut", "MiniMapZoomIn", "MiniMapZoomOut",
         "GameTimeFrame", "GameTimeTexture", "TimeManagerClockButton", "MiniMapCalendarButton",
         "GameTimeCalendarInvitesTexture", "GameTimeCalendarInvitesGlow", "GameTimeCalendarEventAlarmTexture",
         "AddonCompartmentFrame", "MiniMapMailFrame",
-        "MinimapBorder", "MinimapBorderTop", "MinimapBackdrop", "MinimapZoneTextButton", "MinimapZoneText",
+        "MinimapBorder", "MinimapBorderTop", "MinimapCompassTexture", "MinimapZoneTextButton", "MinimapZoneText",
         "MinimapClusterBorderTop"}) do Hide(_G[name]) end
     WalkMinimap(function(frame)
-        for _, key in ipairs({"MailFrame", "ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
+        for _, key in ipairs({"MailFrame", "ZoomHitArea", "ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
             "Calendar", "CalendarButton", "GameTimeFrame", "GameTimeTexture", "DielFrame",
             "AddonCompartmentFrame", "AddonCompartment", "ZoneTextButton", "BorderTop"}) do
             Hide(frame[key])
@@ -369,8 +388,12 @@ end
 -- Independent mail notification: use Blizzard mail APIs without its minimap frame.
 local function UpdateMail()
     if not mailButton then return end
-    local waiting = HasNewMail and HasNewMail()
-    mailButton:SetShown(not not waiting)
+    local query = HasNewMail or (C_Mail and C_Mail.HasNewMail)
+    local ok, waiting = false, nil
+    if type(query)=="function" then ok,waiting=pcall(query) end
+    if ok and not (issecretvalue and issecretvalue(waiting)) then
+        mailButton:SetShown(waiting==true or waiting==1)
+    end
 end
 
 local function CreateMailButton()
@@ -379,17 +402,33 @@ local function CreateMailButton()
     mailButton:SetFrameStrata(holder:GetFrameStrata())
     mailButton:SetFrameLevel(holder:GetFrameLevel()+10)
     -- The left rim stays independent of Blizzard HUD Edit Mode and scales with our map.
-    mailButton:SetPoint("TOPLEFT", mapViewport, "TOPLEFT", -29, -25)
+    mailButton:SetPoint("TOPLEFT", mapViewport, "TOPLEFT", -29, 0)
     local icon = mailButton:CreateTexture(nil, "ARTWORK")
-    icon:SetAllPoints()
-    icon:SetTexture("Interface\\Minimap\\Minimap-Mail")
+    icon:SetPoint("CENTER")
+    -- The former Minimap-Mail path is not the native mail asset. Prefer the
+    -- client atlas only when it exists, retaining its original aspect ratio.
+    local atlas="ui-hud-minimap-mail-up"
+    local info=C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+    if info and icon.SetAtlas then
+        icon:SetAtlas(atlas)
+        local w,h=info.width or 20,info.height or 15
+        local scale=24/math.max(w,h,1)
+        icon:SetSize(w*scale,h*scale)
+    else
+        icon:SetTexture("Interface\\Icons\\INV_Letter_15")
+        icon:SetSize(24,24)
+    end
+    mailButton:Hide()
     mailButton:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText(HAVE_MAIL or "You have unread mail", 1, 0.82, 0)
-        if GetLatestThreeSenders then
-            local sender1, sender2, sender3 = GetLatestThreeSenders()
-            for _, sender in ipairs({sender1, sender2, sender3}) do
+        local senders=GetLatestThreeSenders or (C_Mail and C_Mail.GetLatestThreeSenders)
+        if senders then
+            local ok,sender1,sender2,sender3 = pcall(senders)
+            local values=ok and {sender1,sender2,sender3} or {}
+            for i=1,3 do
+                local sender=values[i]
                 if type(sender) == "string" and sender ~= "" then
                     GameTooltip:AddLine(sender, 1, 1, 1)
                 end
@@ -397,7 +436,11 @@ local function CreateMailButton()
         end
         GameTooltip:Show()
     end)
-    mailButton:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+    local function HideMailTooltip(self)
+        if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end
+    mailButton:SetScript("OnLeave",HideMailTooltip)
+    mailButton:SetScript("OnHide",HideMailTooltip)
     UpdateMail()
 end
 
@@ -661,10 +704,51 @@ local function UpdateOptions()
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
+    options.rotate:SetChecked(db.rotate)
+    options.headerBelow:SetChecked(db.headerBelow)
+    options.iconScale:SetValue(db.iconScale)
+    options.iconText:SetText(Minimap.SetIconScale and ("Native icon scale: "..math.floor(db.iconScale*100+.5).."%") or "Native icon scale: unavailable on this client")
     options.accent:SetText("Border: "..db.accent)
     options.status:SetText(pending and "Changes queued until combat ends." or
         (db.locked and "Position and resize handle locked." or "Drag the zone bar or bottom-right resize handle."))
     options.refreshing = false
+end
+
+-- Keep native renderer/children alive. The former LOW-strata, mouse-enabled
+-- cluster could intercept the BACKGROUND map even after it was reparented.
+local function ReleaseNativeHitRegions()
+    local function Release(frame)
+        if not frame or frame==Minimap or not frame.EnableMouse then return end
+        frame:EnableMouse(false)
+        if frame.EnableMouseMotion then frame:EnableMouseMotion(false) end
+        if frame.EnableMouseWheel then frame:EnableMouseWheel(false) end
+    end
+    Release(MinimapCluster)
+    if MinimapCluster then
+        Release(MinimapCluster.MinimapContainer)
+        Release(MinimapCluster.Selection)
+        Release(MinimapCluster.Highlight)
+    end
+    Release(MinimapBackdrop)
+end
+
+local function InstallOwnershipHooks()
+    if not hooksecurefunc then return end
+    local function Dirty()
+        if ready and not applying then layoutDirty=true end
+    end
+    local function Watch(frame,methods)
+        if not frame then return end
+        for _,method in ipairs(methods) do
+            if type(frame[method])=="function" then hooksecurefunc(frame,method,Dirty) end
+        end
+    end
+    Watch(Minimap,{"SetParent","SetPoint","SetSize","SetScale","SetIconScale"})
+    Watch(MinimapCluster,{"EnableMouse","Layout","SetIconScale","SetRotateMinimap","SetHeaderUnderneath"})
+    if MinimapCluster then
+        Watch(MinimapCluster.Selection,{"EnableMouse","Show"})
+        Watch(MinimapCluster.MinimapContainer,{"EnableMouse"})
+    end
 end
 
 local function Apply()
@@ -676,16 +760,30 @@ local function Apply()
     SuppressNativeChrome()
     SuppressNativeCoordinates()
     LayoutControls()
+    mapViewport:ClearAllPoints()
+    mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,db.headerBelow and -2 or -(topHeight+2))
+    header:ClearAllPoints()
+    header:SetPoint("TOPLEFT",mapViewport,db.headerBelow and "BOTTOMLEFT" or "TOPLEFT",0,db.headerBelow and 0 or topHeight)
+    header:SetPoint("TOPRIGHT",mapViewport,db.headerBelow and "BOTTOMRIGHT" or "TOPRIGHT",0,db.headerBelow and 0 or topHeight)
     RecoverPosition()
     holder:ClearAllPoints()
     holder:SetPoint(db.point, UIParent, db.point, db.x, db.y)
     -- Match map geometry to the viewport, without scaling the player arrow.
+    Minimap:SetParent(holder)
+    ReleaseNativeHitRegions()
     Minimap:ClearAllPoints()
     -- Use native unit scaling: applying a 2x scale also makes the player arrow 2x.
     -- Allow the map texture and its internal icons to keep their normal sizes.
     Minimap:SetFrameStrata("BACKGROUND")
     Minimap:SetScale(1)
     Minimap:SetSize(db.size,db.size)
+    if Minimap.SetIconScale then Minimap:SetIconScale(db.iconScale) end
+    local getCVar=(C_CVar and C_CVar.GetCVar) or GetCVar
+    local setCVar=(C_CVar and C_CVar.SetCVar) or SetCVar
+    if getCVar and setCVar then
+        local wanted=db.rotate and "1" or "0"
+        if getCVar("rotateMinimap")~=wanted then setCVar("rotateMinimap",wanted) end
+    end
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
     Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
     if not accents[db.accent] then db.accent="purple" end
@@ -699,7 +797,8 @@ local function Apply()
     zone:SetWidth(math.max(60,db.size-64))
     LayoutFPS()
     UpdateFPS()
-    pending, applying = false, false
+    pending, applying, layoutDirty = false, false, false
+    rimDirty=true
     UpdateLabels()
     UpdateCoordinates()
     UpdateDurability()
@@ -708,6 +807,8 @@ end
 
 local function Reset()
     for key, value in pairs(defaults) do db[key] = value end
+    db.rimPositions={}
+    for _,entry in ipairs(drawerEntries) do entry.position=nil end
     Apply()
 end
 
@@ -715,7 +816,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 552)
+        options:SetSize(390, 690)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -768,9 +869,26 @@ local function ToggleOptions()
         end)
         options.accent:SetPoint("TOPLEFT",22,-450)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-482)
-        compatibility:SetPoint("TOPRIGHT",-22,-482)
+        compatibility:SetPoint("TOPLEFT",22,-620)
+        compatibility:SetPoint("TOPRIGHT",-22,-620)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
+        options.rotate=Check("Rotate minimap (shared native setting)",-484,"rotate")
+        options.headerBelow=Check("Zone header below map",-516,"headerBelow")
+        options.iconText=options:CreateFontString(nil,"OVERLAY","GameFontHighlight")
+        options.iconText:SetPoint("TOPLEFT",22,-558)
+        options.iconScale=CreateFrame("Slider",nil,options,"OptionsSliderTemplate")
+        options.iconScale:SetPoint("TOPLEFT",24,-587)
+        options.iconScale:SetSize(340,18)
+        options.iconScale:SetMinMaxValues(.5,2)
+        options.iconScale:SetValueStep(.05)
+        if options.iconScale.SetObeyStepOnDrag then options.iconScale:SetObeyStepOnDrag(true) end
+        options.iconScale:SetScript("OnValueChanged",function(_,value)
+            if options.refreshing then return end
+            db.iconScale=math.max(.5,math.min(2,Number(value,1))); Apply()
+        end)
+        Tooltip(options.iconScale,"Native map icons","Scales supported quest/POI indicators, not terrain or addon buttons. Requires the client SetIconScale API.")
+        Tooltip(sizeSlider,"Visible map size","Changes terrain width and height in UI units without scaling buttons or the player arrow.")
+        Tooltip(options.rotate,"Rotation","Uses Blizzard's shared rotateMinimap setting. VoidMark restores this preference after HUD Edit Mode closes.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
         options.status:SetPoint("BOTTOMRIGHT", -14, 14)
@@ -865,7 +983,7 @@ local function Initialize()
     gearLabel:SetTextColor(0.7,0.6,0.85)
     gear:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
     gear:SetScript("OnClick",ToggleOptions)
-    gear:SetPoint("TOPRIGHT", -3, -3)
+    gear:SetPoint("RIGHT",header,"RIGHT",-2,0)
     Tooltip(gear, "VoidMark Mini Map", "Click to adjust map size, lock position, or reset.")
     footer=CreateFrame("Frame",nil,holder,"BackdropTemplate")
     footer:SetPoint("BOTTOMLEFT",holder,"BOTTOMLEFT",4,2)
@@ -976,6 +1094,7 @@ local function Initialize()
             if ready and not InCombatLockdown() then Apply() end
         end)
     end
+    InstallOwnershipHooks()
     ready = true
     Apply()
     Say("Loaded. /vmini opens settings.")
@@ -1004,10 +1123,12 @@ end
 for _, event in ipairs({"PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
     "DISPLAY_SIZE_CHANGED", "UI_SCALE_CHANGED", "ADDON_LOADED",
-    "UPDATE_PENDING_MAIL", "MAIL_INBOX_UPDATE",
+    "UPDATE_PENDING_MAIL", "MAIL_INBOX_UPDATE", "MAIL_SHOW", "MAIL_CLOSED", "CVAR_UPDATE",
     "PLAYER_EQUIPMENT_CHANGED", "UPDATE_INVENTORY_DURABILITY", "MERCHANT_CLOSED", "MERCHANT_SHOW", "MERCHANT_UPDATE", "PLAYER_DEAD", "PLAYER_UNGHOST"}) do VM:RegisterEvent(event) end
-VM:SetScript("OnEvent", function(_, event)
-    if event == "UPDATE_PENDING_MAIL" or event == "MAIL_INBOX_UPDATE" then
+VM:SetScript("OnEvent", function(_, event, name)
+    if event=="CVAR_UPDATE" then
+        if name=="rotateMinimap" then layoutDirty=true end
+    elseif event == "UPDATE_PENDING_MAIL" or event == "MAIL_INBOX_UPDATE" or event=="MAIL_SHOW" or event=="MAIL_CLOSED" then
         UpdateMail()
     elseif event == "MERCHANT_SHOW" then
         merchantOpen=true;repairPending=true
@@ -1031,11 +1152,16 @@ VM:SetScript("OnEvent", function(_, event)
         if ready then Apply(); UpdateMail(); repairPending=true end
     else UpdateLabels() end
 end)
-local elapsed, coordinateElapsed, drawerElapsed, rimElapsed, fpsElapsed, durabilityElapsed, latencyElapsed = 0,0,0,0,0,0,0
+local discoverySignature
+local elapsed, coordinateElapsed, drawerElapsed, fpsElapsed, durabilityElapsed, latencyElapsed = 0,0,0,0,0,0
 VM:SetScript("OnUpdate", function(_, delta)
     elapsed = elapsed + delta
     if elapsed >= 1 then elapsed = 0; UpdateLabels() end
     if not ready then return end
+    if not InCombatLockdown() and not InEditMode() then
+        if layoutDirty then Apply() end
+        if rimDirty then RefreshRim() end
+    elseif layoutDirty or rimDirty then pending=true end
     if repairPending and repair then
         repairPending=false
         repair:Refresh(merchantOpen)
@@ -1049,13 +1175,24 @@ VM:SetScript("OnUpdate", function(_, delta)
     if fpsElapsed>=0.25 then fpsElapsed=0; UpdateFPS() end
     coordinateElapsed=coordinateElapsed+delta
     drawerElapsed=drawerElapsed+delta
-    rimElapsed=rimElapsed+delta
-    if rimElapsed>=0.2 then rimElapsed=0; RefreshRim() end
     if coordinateElapsed>=0.5 then coordinateElapsed=0; UpdateCoordinates() end
     if drawerElapsed>=2 then
         drawerElapsed=0
         if InCombatLockdown() or InEditMode() then pending=true
-        else SuppressNativeChrome(); LayoutControls(); LayoutDrawer(); LayoutFPS() end
+        else
+            SuppressNativeChrome()
+            CollectControls()
+            local signature={tostring(db.drawer),tostring(#controls),tostring(_G.VoidMarkNexusMinimap),
+                tostring(_G.VoidMarkMinimapButton),tostring(_G.VoidMarkMarketMinimapButton)}
+            local lib=LibStub and LibStub("LibDBIcon-1.0",true)
+            if lib and lib.GetButtonList and lib.GetMinimapButton then
+                local names=lib:GetButtonList();table.sort(names)
+                for _,name in ipairs(names) do signature[#signature+1]=name..tostring(lib:GetMinimapButton(name)) end
+            end
+            local key=table.concat(signature,"|")
+            if key~=discoverySignature then discoverySignature=key;RefreshRim() end
+            if _G.TaliaaFPSFrame~=embeddedFPS then LayoutFPS() end
+        end
     end
     if coordinateElapsed==0 then SuppressNativeCoordinates() end
 end)

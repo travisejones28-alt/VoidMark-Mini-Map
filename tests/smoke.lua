@@ -15,6 +15,8 @@ function Methods:GetStringWidth()
     return width
 end
 function Methods:SetTexture(v) self.texture=v end
+function Methods:SetAtlas(v) self.atlas=v end
+function Methods:SetIconScale(v) self.iconScale=v end
 function Methods:SetTexCoord(...) self.texcoord={...} end
 function Methods:SetRotation(v) self.rotation=v end
 function Methods:SetJustifyH(v) self.justify=v end
@@ -105,7 +107,21 @@ UIParent:SetSize(1920,1080)
 Minimap=CreateFrame("Minimap")
 Minimap:SetSize(140,140)
 -- Missing legacy controls must not discard modern controls or error on nil holes.
-MinimapCluster={Tracking=CreateFrame("Button"), MailFrame=CreateFrame("Button")}
+MinimapCluster=CreateFrame("Frame",nil,UIParent)
+MinimapCluster:EnableMouse(true)
+MinimapCluster.Tracking=CreateFrame("Button",nil,MinimapCluster)
+MinimapCluster.MailFrame=CreateFrame("Button",nil,MinimapCluster)
+MinimapCluster.MinimapContainer=CreateFrame("Frame",nil,MinimapCluster)
+MinimapCluster.Selection=CreateFrame("Frame",nil,MinimapCluster)
+MinimapCluster.Selection:EnableMouse(true)
+Minimap.ZoomHitArea=CreateFrame("Frame",nil,Minimap)
+Minimap.ZoomHitArea:EnableMouse(true)
+local cvars={rotateMinimap="0"}
+function GetCVar(key) return cvars[key] end
+function SetCVar(key,value) cvars[key]=value end
+if VMM_TEST_ATLAS then
+ C_Texture={GetAtlasInfo=function() return {width=20,height=15} end}
+end
 GameTimeFrame=CreateFrame("Button")
 UISpecialFrames={}
 SlashCmdList={}
@@ -153,7 +169,7 @@ assert(Minimap:GetFrameStrata()=="BACKGROUND" and VoidMarkMiniMapFrame:GetFrameS
 assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
 assert(VoidMarkMiniMapDB.locked==true)
 assert(MinimapCluster.Tracking.parent==VoidMarkMiniMapFrame)
-assert(MinimapCluster.MailFrame.parent==VoidMarkMiniMapFrame)
+assert(MinimapCluster.MailFrame.parent~=VoidMarkMiniMapFrame and not MinimapCluster.MailFrame:IsShown(),"Native mail must stay suppressed")
 assert(GameTimeFrame.parent~=VoidMarkMiniMapFrame and not GameTimeFrame:IsShown())
 command("size 420")
 assert(Minimap.width==420)
@@ -244,7 +260,7 @@ local lib={GetButtonList=function() return {"Test","Hidden","Protected"} end,
 LibStub=function() return lib end
 controller.scripts.OnUpdate(controller,2)
 assert(icon.parent==VoidMarkMiniMapFrame)
-assert(icon:GetScript("OnDragStart")==nil,"Managed icons should not be dragged onto map")
+assert(icon:GetScript("OnDragStart")==dragStart,"Managed icons must preserve native dragging")
 assert(not hidden:IsShown())
 assert(protected.parent==Minimap)
 assert(not VoidMarkMiniMapDrawer:IsShown(),"Addon icons now stay on perimeter")
@@ -331,9 +347,9 @@ VoidMarkNexusMinimap:SetScript("OnClick",function() clicks=clicks+1 end)
 controller.scripts.OnUpdate(controller,2)
 assert(VoidMarkNexusMinimap.parent==VoidMarkMiniMapFrame)
 assert(VoidMarkNexusMinimap.point[2]==VoidMarkMiniMapFrame)
-assert(not VoidMarkNexusMinimap:GetScript("OnMouseDown"))
-assert(not VoidMarkNexusMinimap:GetScript("OnMouseUp"))
-assert(not VoidMarkNexusMinimap:GetScript("OnUpdate"))
+assert(VoidMarkNexusMinimap:GetScript("OnMouseDown")==nexusDown)
+assert(VoidMarkNexusMinimap:GetScript("OnMouseUp")==nexusUp)
+assert(VoidMarkNexusMinimap:GetScript("OnUpdate")==nexusTick)
 VoidMarkNexusMinimap.scripts.OnClick()
 assert(clicks==1,"Keep Nexus click actions")
 assert(icon:GetScript("OnMouseDown")==nil)
@@ -401,7 +417,7 @@ assert(TaliaaFPSFrame.parent==fallback.parent,"Embed native FPS frame in footer"
 assert(TaliaaFPSFrame:GetScript("OnUpdate")==update)
 assert(not TaliaaFPSFrame.mouse and not fallback:IsShown())
 assert(TaliaaFPSDB.scale==1.4 and TaliaaFPSDB.x==-20,"Do not overwrite standalone settings")
-assert(VoidMarkMiniMapFrame.height==Minimap.height+38,"Reserve footer space outside terrain")
+assert(VoidMarkMiniMapFrame.height==Minimap.height+60,"Reserve header and footer space outside terrain")
 assert(fallback.fontSize>=12 and fallback.fontSize<=14 and fallback.fontFlags=="OUTLINE","Footer must use readable outlined text")
 assert(VoidMarkMiniMapOptions.fps:GetChecked(),"Show FPS defaults on")
 VoidMarkMiniMapOptions.fps:SetChecked(false)
@@ -660,3 +676,5 @@ assert(x>=0 and x+latency.width<=600,'Latency-only layout escaped minimap')
 setOption('latency',false);setOption('fps',true)
 assert(not latency:IsShown() and nativeFPS:IsShown(),'FPS-only mode must hide latency')
 realPrint('PASS: FPS-only, latency-only, both/neither with built-in and embedded providers; independent saved toggles')
+
+dofile('tests/compatibility.lua')({controller=controller,event=event,command=command,frames=frames,header=drag,icon=icon,combat=function(v)combat=v end,print=realPrint})

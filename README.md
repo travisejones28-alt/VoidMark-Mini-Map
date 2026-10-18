@@ -75,7 +75,7 @@ API references: [Forever tooltip API declaration](https://github.com/Gethe/wow-u
 
 ## 0.2.0 footer
 
-The footer presents **Time | Coordinates | Durability | FPS**, with a translucent black background, one-pixel purple border, quiet highlight, small diamond separators, and clock/location/shield icons. Text uses an outlined 12–14 point font with a subtle shadow, adjusted for map size.
+The footer presents **Time | Coordinates | Durability | FPS**, with a translucent black background, one-pixel purple border, quiet highlight, small diamond separators, and clock/location/shield icons. Text uses an outlined 12-14 point font with a subtle shadow, adjusted for map size.
 
 - Local-only time has no prefix: `3:11 PM`. Server-only time also stands alone. Both clocks use `Server` and `Local` labels; at narrow widths the clock segment uses two lines. The saved 12/24-hour preference is unchanged.
 - Enable **Show equipment durability** in `/vmini`. It defaults on for an existing character without this new setting. Durability is the sum of current equipped-item durability divided by the sum of maximum durability for equipment that reports valid durability. It is not the lowest single item's percentage. Non-durable/empty slots are ignored; unavailable readings show `--` when no valid equipment can be measured.
@@ -156,3 +156,10 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 
 - Added a saved 24-hour/12-hour AM/PM checkbox in `/vmini` that applies to both server and local clocks. Existing settings default to 24-hour time. Footer spacing accounts for the longer AM/PM labels.
 - Regression tests cover both clock sources, midnight, noon, and changing formats.
+# Compatibility update 0.3.0
+
+`/vmini` now includes native icon scale, rotation and header position alongside
+terrain size. Mail uses a checked native atlas with a legacy fallback. Native HUD
+hit regions no longer cover the detached map; addon drag handlers are preserved.
+See [COMPATIBILITY.md](COMPATIBILITY.md) for the audit, API limitations, tests and
+in-game verification checklist. Rotation remains a shared Blizzard setting.

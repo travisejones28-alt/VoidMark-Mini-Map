@@ -15,7 +15,7 @@ assert toc.index('Footer.lua') < toc.index('Repair.lua') < toc.index('VoidMarkMi
 runtime.execute("dofile('Footer.lua'); dofile('tests/footer.lua')")
 runtime = LuaRuntime()
 runtime.execute("dofile('Repair.lua'); dofile('tests/repair.lua')")
-for setup in ('', 'VMM_TEST_SAVED_SETTINGS=true', 'VMM_TEST_OLD_FPS_OFF=true', 'VMM_TEST_CONFLICT=true; LeaPlusLC={MinimapModder="On"}',
+for setup in ('', 'VMM_TEST_ATLAS=true', 'VMM_TEST_SAVED_SETTINGS=true', 'VMM_TEST_OLD_FPS_OFF=true', 'VMM_TEST_CONFLICT=true; LeaPlusLC={MinimapModder="On"}',
               'VMM_TEST_CONFLICT=true; MoveAny={IsEnabled=function() return true end}'):
     runtime = LuaRuntime()
     if setup:
