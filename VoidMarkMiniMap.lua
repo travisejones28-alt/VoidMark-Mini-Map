@@ -797,6 +797,18 @@ local function Apply()
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
     -- Forever-compatible native square mask, matching SquareForeverMinimap.
     Minimap:SetMaskTexture(squareMaskPath)
+    -- Forever's native minimap can retain stale terrain tiles after changing
+    -- its rendering geometry or rotateMinimap. Force the same redraw used by
+    -- ForeverSquareMinimap after its geometry updates.
+    if db.rotate and Minimap.GetZoom and Minimap.SetZoom and Minimap.GetZoomLevels then
+        local zoom = Minimap:GetZoom()
+        local maxZoom = Minimap:GetZoomLevels() - 1
+        if type(zoom)=="number" and type(maxZoom)=="number" and maxZoom>0 then
+            local alternate = zoom < maxZoom and zoom+1 or zoom-1
+            Minimap:SetZoom(alternate)
+            Minimap:SetZoom(zoom)
+        end
+    end
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
         local color=accents[db.accent]
