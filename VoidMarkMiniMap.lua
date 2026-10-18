@@ -129,7 +129,7 @@ end
 
 local function CollectControls()
     local function Add(control)
-        if not control or seenControls[control] or (control.IsProtected and control:IsProtected()) then return end
+        if not control or seenControls[control] then return end
         seenControls[control] = true
         controls[#controls+1] = control
         control:SetParent(holder)
@@ -138,6 +138,7 @@ local function CollectControls()
     end
     Add(MiniMapTracking)
     Add(MiniMapTrackingButton)
+    -- Out-of-combat protected native controls can be moved; do not skip the mail frame.
     -- Mail has a composite envelope/seal texture; never resize it with addon buttons.
     Add(MiniMapMailFrame)
     Add(MiniMapWorldMapButton)
@@ -254,9 +255,11 @@ end
 -- a button. Periodically reassert the square layout, including after dragging.
 local function RefreshRim()
     if not ready or InCombatLockdown() or InEditMode() then return end
+    -- Discover native mail controls that Blizzard creates after initialization.
+    CollectControls()
     local count = 0
     for _,control in ipairs(controls) do
-        if control:IsShown() and not (control.IsProtected and control:IsProtected()) then
+        if control:IsShown() then
             local scale=math.max(0.01,Number(control:GetScale(),1))
             local point,rel,relpoint,x,y=RimPoint(count)
             control:ClearAllPoints()
