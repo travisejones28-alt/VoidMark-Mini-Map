@@ -9,6 +9,7 @@ local ShowDurabilityTooltip, HideDurabilityTooltip
 local VM = CreateFrame("Frame")
 local db, holder, header, zone, clock, options, sizeSlider, lockButton, grip, dock, mapViewport
 local ready, pending, applying = false, false, false
+local nativeMinimapSize
 local restoringSquareMask = false
 local squareMaskPath = "Interface\\ChatFrame\\ChatFrameBackground"
 local controls, seenControls = {}, {}
@@ -793,9 +794,10 @@ local function Apply()
     -- Use native unit scaling: applying a 2x scale also makes the player arrow 2x.
     -- Allow the map texture and its internal icons to keep their normal sizes.
     Minimap:SetFrameStrata("BACKGROUND")
-    Minimap:SetScale(1)
-    -- Native Forever rotation also rotates the mask; prevent terrain escaping.
-    Minimap:SetSize(db.size,db.size)
+    -- The Forever renderer must retain its original coordinate system.
+    -- Altering native width/height creates a rotated rectangular map surface.
+    Minimap:SetSize(nativeMinimapSize,nativeMinimapSize)
+    Minimap:SetScale(db.size/nativeMinimapSize)
     if Minimap.SetIconScale then Minimap:SetIconScale(db.iconScale) end
     local getCVar=(C_CVar and C_CVar.GetCVar) or GetCVar
     local setCVar=(C_CVar and C_CVar.SetCVar) or SetCVar
@@ -953,6 +955,7 @@ local function Initialize()
     holder:EnableMouse(false)
     holder:SetClampedToScreen(true)
     Backdrop(holder)
+    nativeMinimapSize = math.max(1,Minimap:GetWidth())
     Minimap:SetParent(holder)
     Minimap:SetFrameStrata("BACKGROUND")
     Minimap:SetScale(1)
