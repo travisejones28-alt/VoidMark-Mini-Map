@@ -790,7 +790,13 @@ local function Apply()
         local wanted=db.rotate and "1" or "0"
         if getCVar("rotateMinimap")~=wanted then setCVar("rotateMinimap",wanted) end
     end
-    Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
+    -- ScrollFrame clipping works for the native minimap renderer on clients
+    -- where Frame:SetClipsChildren does not clip this special frame type.
+    -- Center the overscanned render using scroll offsets, not frame anchors.
+    mapViewport:SetScrollChild(Minimap)
+    local crop = (renderSize-db.size)/2
+    mapViewport:SetHorizontalScroll(crop)
+    mapViewport:SetVerticalScroll(crop)
     Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
@@ -941,11 +947,11 @@ local function Initialize()
     Minimap:SetScale(1)
     Minimap:EnableMouse(true)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
-    mapViewport = CreateFrame("Frame",nil,holder)
+    mapViewport = CreateFrame("ScrollFrame",nil,holder)
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-(topHeight+2))
     mapViewport:SetSize(db.size,db.size)
     mapViewport:EnableMouse(false)
-    if mapViewport.SetClipsChildren then mapViewport:SetClipsChildren(true) end
+    -- ScrollFrame clips its scroll child independently of frame texture masking.
     _G.GetMinimapShape = function() return "SQUARE" end
     VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
     VM.hiddenChrome:Hide()
