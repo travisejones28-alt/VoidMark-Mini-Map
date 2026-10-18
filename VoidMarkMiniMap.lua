@@ -705,7 +705,7 @@ local function UpdateOptions()
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
-    options.rotate:SetChecked(false)
+    options.rotate:SetChecked(db.rotate)
     options.headerBelow:SetChecked(db.headerBelow)
     options.iconScale:SetValue(db.iconScale)
     options.iconText:SetText(Minimap.SetIconScale and ("Native icon scale: "..math.floor(db.iconScale*100+.5).."%") or "Native icon scale: unavailable on this client")
@@ -760,7 +760,6 @@ local function Apply()
     if applying then return end
     applying = true
     db.size = Size(db.size)
-    db.rotate = false -- Restore a contained map after an older rotating setting.
     SuppressNativeChrome()
     SuppressNativeCoordinates()
     LayoutControls()
@@ -788,12 +787,13 @@ local function Apply()
     local getCVar=(C_CVar and C_CVar.GetCVar) or GetCVar
     local setCVar=(C_CVar and C_CVar.SetCVar) or SetCVar
     if getCVar and setCVar then
-        local wanted="0"
+        local wanted=db.rotate and "1" or "0"
         if getCVar("rotateMinimap")~=wanted then setCVar("rotateMinimap",wanted) end
     end
     -- The native minimap renderer ignores ScrollFrame child clipping on Forever.
     Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
-    Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
+    -- Native square mask: do not overscan or rotate a secondary mask.
+    Minimap:SetMaskTexture("Interface\\ChatFrame\\ChatFrameBackground")
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
         local color=accents[db.accent]
@@ -880,8 +880,7 @@ local function ToggleOptions()
         compatibility:SetPoint("TOPLEFT",22,-620)
         compatibility:SetPoint("TOPRIGHT",-22,-620)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
-        options.rotate=Check("Rotate minimap (temporarily unavailable)",-484,"rotate")
-        options.rotate:Disable()
+        options.rotate=Check("Rotate minimap (native square)",-484,"rotate")
         options.headerBelow=Check("Zone header below map",-516,"headerBelow")
         options.iconText=options:CreateFontString(nil,"OVERLAY","GameFontHighlight")
         options.iconText:SetPoint("TOPLEFT",22,-558)
@@ -897,7 +896,7 @@ local function ToggleOptions()
         end)
         Tooltip(options.iconScale,"Native map icons","Scales supported quest/POI indicators, not terrain or addon buttons. Requires the client SetIconScale API.")
         Tooltip(sizeSlider,"Visible map size","Changes terrain width and height in UI units without scaling buttons or the player arrow.")
-        Tooltip(options.rotate,"Rotation","Forever rotates the native mask with terrain. Disabled until a safe square rotation method is available.")
+        Tooltip(options.rotate,"Rotation","Uses native map rotation with the standard square mask.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         options.status:SetPoint("BOTTOMLEFT", 14, 14)
         options.status:SetPoint("BOTTOMRIGHT", -14, 14)
