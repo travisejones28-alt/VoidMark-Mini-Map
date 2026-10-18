@@ -156,10 +156,13 @@ Reference inspection: the available GatherLite and TomTom LibDBIcon copies use t
 
 - Added a saved 24-hour/12-hour AM/PM checkbox in `/vmini` that applies to both server and local clocks. Existing settings default to 24-hour time. Footer spacing accounts for the longer AM/PM labels.
 - Regression tests cover both clock sources, midnight, noon, and changing formats.
-# Compatibility update 0.3.0
+# Compatibility update 0.3.1
 
 `/vmini` now includes native icon scale, rotation and header position alongside
 terrain size. Mail uses a checked native atlas with a legacy fallback. Native HUD
 hit regions no longer cover the detached map; addon drag handlers are preserved.
 See [COMPATIBILITY.md](COMPATIBILITY.md) for the audit, API limitations, tests and
 in-game verification checklist. Rotation remains a shared Blizzard setting.
+
+0.3.1 handles Forever's delayed rotation mask reset, suppresses its circular
+compass underlay, and places the envelope inside the map's top-left corner.

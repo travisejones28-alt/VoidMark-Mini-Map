@@ -116,6 +116,11 @@ MinimapCluster.Selection=CreateFrame("Frame",nil,MinimapCluster)
 MinimapCluster.Selection:EnableMouse(true)
 Minimap.ZoomHitArea=CreateFrame("Frame",nil,Minimap)
 Minimap.ZoomHitArea:EnableMouse(true)
+MinimapCompassTextureUnderlay=CreateFrame("Texture",nil,Minimap)
+function MinimapCluster:UpdateMinimapConfig()
+    Minimap:SetMaskTexture('ui-hud-minimap-frame-generic-mask')
+    MinimapCompassTextureUnderlay:Show()
+end
 local cvars={rotateMinimap="0"}
 function GetCVar(key) return cvars[key] end
 function SetCVar(key,value) cvars[key]=value end

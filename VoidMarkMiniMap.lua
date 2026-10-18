@@ -364,7 +364,7 @@ local function SuppressNativeChrome()
         "GameTimeFrame", "GameTimeTexture", "TimeManagerClockButton", "MiniMapCalendarButton",
         "GameTimeCalendarInvitesTexture", "GameTimeCalendarInvitesGlow", "GameTimeCalendarEventAlarmTexture",
         "AddonCompartmentFrame", "MiniMapMailFrame",
-        "MinimapBorder", "MinimapBorderTop", "MinimapCompassTexture", "MinimapZoneTextButton", "MinimapZoneText",
+        "MinimapBorder", "MinimapBorderTop", "MinimapCompassTexture", "MinimapCompassTextureUnderlay", "MinimapZoneTextButton", "MinimapZoneText",
         "MinimapClusterBorderTop"}) do Hide(_G[name]) end
     WalkMinimap(function(frame)
         for _, key in ipairs({"MailFrame", "ZoomHitArea", "ZoomIn", "ZoomOut", "ZoomInButton", "ZoomOutButton",
@@ -401,8 +401,9 @@ local function CreateMailButton()
     mailButton:SetSize(24, 24)
     mailButton:SetFrameStrata(holder:GetFrameStrata())
     mailButton:SetFrameLevel(holder:GetFrameLevel()+10)
-    -- The left rim stays independent of Blizzard HUD Edit Mode and scales with our map.
-    mailButton:SetPoint("TOPLEFT", mapViewport, "TOPLEFT", -29, 0)
+    -- A small inset keeps the envelope inside the terrain's top-left corner.
+    -- Anchor to the viewport, not the movable header or Blizzard's HUD shell.
+    mailButton:SetPoint("TOPLEFT", mapViewport, "TOPLEFT", 6, -6)
     local icon = mailButton:CreateTexture(nil, "ARTWORK")
     icon:SetPoint("CENTER")
     -- The former Minimap-Mail path is not the native mail asset. Prefer the
@@ -743,8 +744,10 @@ local function InstallOwnershipHooks()
             if type(frame[method])=="function" then hooksecurefunc(frame,method,Dirty) end
         end
     end
-    Watch(Minimap,{"SetParent","SetPoint","SetSize","SetScale","SetIconScale"})
-    Watch(MinimapCluster,{"EnableMouse","Layout","SetIconScale","SetRotateMinimap","SetHeaderUnderneath"})
+    Watch(Minimap,{"SetParent","SetPoint","SetSize","SetScale","SetIconScale","SetMaskTexture"})
+    -- Forever (Camelot) updates the mask and compass underlay in a CVar callback
+    -- after the rotation setting changes, independently of HUD layout methods.
+    Watch(MinimapCluster,{"EnableMouse","Layout","SetIconScale","SetRotateMinimap","SetHeaderUnderneath","UpdateMinimapConfig"})
     if MinimapCluster then
         Watch(MinimapCluster.Selection,{"EnableMouse","Show"})
         Watch(MinimapCluster.MinimapContainer,{"EnableMouse"})

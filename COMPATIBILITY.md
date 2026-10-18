@@ -1,5 +1,27 @@
 # Forever compatibility audit - 0.3.0
 
+## Follow-up 0.3.1: rotation and envelope placement
+
+The Forever-specific `Camelot/Minimap.lua` defines `UpdateMinimapConfig`, called
+from the rotateMinimap CVar callback. It resets the map mask and shows
+`MinimapCompassTextureUnderlay` when rotating. The 0.3.0 hooks covered the shared
+layout methods but missed both this updater and direct SetMaskTexture writes.
+0.3.1 observes both and coalesces a square-mask restoration, with the same combat
+and Edit Mode deferral. The underlay is parked with the other hidden native
+decorations, so a subsequent native Show cannot reveal the circle. No renderer
+enlargement, fake terrain, or player-arrow scaling is introduced.
+
+The envelope now anchors six UI units inside the viewport's top-left corner,
+independent of header position, resizing, and rotation. This supersedes the
+original outside-envelope requirement.
+
+All existing automated suites pass with added regressions for the delayed native
+rotation callback, direct mask writes, ring suppression, combat recovery and
+inside-envelope anchoring. Live turning/terrain coverage still requires testing.
+
+Native source:
+https://github.com/Gethe/wow-ui-source/blob/forever/Interface/AddOns/Blizzard_Minimap/Camelot/Minimap.lua
+
 Base: main `c94016e8ff0340ab0addc9b91b3d9e68a9e9ca53` (2026-10-18).
 
 ## Ownership and marker interaction

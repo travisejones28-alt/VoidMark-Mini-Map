@@ -16,6 +16,7 @@ return function(t)
  t.event('UPDATE_PENDING_MAIL');assert(not mail:IsShown())
  waiting=true;t.event('UPDATE_PENDING_MAIL');assert(mail:IsShown())
  local anchor=mail.point
+ assert(anchor[1]=='TOPLEFT' and anchor[3]=='TOPLEFT' and anchor[4]==6 and anchor[5]==-6,'Mail inset inside top-left terrain')
  GetLatestThreeSenders=function()return 'Sender A',nil,'Sender C' end
  mail.scripts.OnEnter(mail)
  assert(GameTooltip.owner==mail and GameTooltip.lines[1]=='Sender A' and GameTooltip.lines[2]=='Sender C','Sparse senders retained')
@@ -35,6 +36,19 @@ return function(t)
   assert(Minimap.iconScale==value and Minimap:GetScale()==1 and Minimap.width==420,'Icon size must not compound terrain scale')
  end
  option('rotate',true);assert(GetCVar('rotateMinimap')=='1')
+ -- Forever delivers its native CVar update after our initial layout. The
+ -- callback replaces the terrain mask and shows the circular compass underlay.
+ MinimapCluster:UpdateMinimapConfig();tick()
+ assert(Minimap.mask=='Interface\\Buttons\\WHITE8X8','Restore square mask after Forever rotation callback')
+ assert(not MinimapCompassTextureUnderlay:IsShown(),'Suppress rotation circle')
+ MinimapCompassTextureUnderlay:Show()
+ assert(not MinimapCompassTextureUnderlay.parent:IsShown(),'Native Show cannot reveal ring under hidden parent')
+ Minimap:SetMaskTexture('another-native-mask');tick()
+ assert(Minimap.mask=='Interface\\Buttons\\WHITE8X8','Direct native mask restoration is observed')
+ t.combat(true);MinimapCluster:UpdateMinimapConfig();tick()
+ assert(Minimap.mask=='ui-hud-minimap-frame-generic-mask','Mask restoration defers during combat')
+ t.combat(false);t.event('PLAYER_REGEN_ENABLED')
+ assert(Minimap.mask=='Interface\\Buttons\\WHITE8X8','Mask restored after combat')
  option('headerBelow',true)
  assert(t.header.point[3]=='BOTTOMRIGHT' and Minimap.height==420,'Header below, independent terrain')
  option('headerBelow',false);assert(t.header.point[3]=='TOPRIGHT' and t.header.point[5]==24,'Header above outside map')
