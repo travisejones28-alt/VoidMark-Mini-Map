@@ -382,7 +382,7 @@ local function CreateMailButton()
     mailButton:SetPoint("TOPLEFT", mapViewport, "TOPLEFT", -29, -25)
     local icon = mailButton:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints()
-    icon:SetTexture("Interface\\Minimap\\Tracking\\Mailbox")
+    icon:SetTexture("Interface\\Minimap\\Minimap-Mail")
     mailButton:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
