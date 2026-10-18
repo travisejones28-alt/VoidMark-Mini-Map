@@ -790,14 +790,15 @@ local function Apply()
         local wanted=db.rotate and "1" or "0"
         if getCVar("rotateMinimap")~=wanted then setCVar("rotateMinimap",wanted) end
     end
-    -- ScrollFrame clipping works for the native minimap renderer on clients
-    -- where Frame:SetClipsChildren does not clip this special frame type.
-    -- Center the overscanned render using scroll offsets, not frame anchors.
-    mapViewport:SetScrollChild(Minimap)
-    local crop = (renderSize-db.size)/2
-    mapViewport:SetHorizontalScroll(crop)
-    mapViewport:SetVerticalScroll(crop)
-    Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
+    -- The native minimap renderer ignores ScrollFrame child clipping on Forever.
+    -- A transparent mask clips the *renderer itself*, including while it rotates.
+    -- The central opaque square is 1/sqrt(2) of the overscanned map width.
+    Minimap:SetPoint("CENTER",mapViewport,"CENTER",0,0)
+    if db.rotate then
+        Minimap:SetMaskTexture("Interface\\AddOns\\"..addonName.."\\Textures\\SquareOverscanMask")
+    else
+        Minimap:SetMaskTexture("Interface\\Buttons\\WHITE8X8")
+    end
     if not accents[db.accent] then db.accent="purple" end
     if db.purple then
         local color=accents[db.accent]
@@ -947,7 +948,7 @@ local function Initialize()
     Minimap:SetScale(1)
     Minimap:EnableMouse(true)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
-    mapViewport = CreateFrame("ScrollFrame",nil,holder)
+    mapViewport = CreateFrame("Frame",nil,holder)
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-(topHeight+2))
     mapViewport:SetSize(db.size,db.size)
     mapViewport:EnableMouse(false)
