@@ -138,6 +138,7 @@ local function CollectControls()
     end
     Add(MiniMapTracking)
     Add(MiniMapTrackingButton)
+    -- Mail has a composite envelope/seal texture; never resize it with addon buttons.
     Add(MiniMapMailFrame)
     Add(MiniMapWorldMapButton)
     -- Calendar and Forever DielFrame day/night chrome are suppressed separately.
@@ -161,7 +162,8 @@ local function LayoutControls()
     for _, control in ipairs(controls) do
         if control:IsShown() then
             local dimension = math.max(control:GetWidth(),control:GetHeight(),1)
-            local scale = math.min(1,24/dimension)
+            local isMail = control == MiniMapMailFrame or (MinimapCluster and control == MinimapCluster.MailFrame)
+            local scale = isMail and 1 or math.min(1,24/dimension)
             control:SetScale(scale)
             control:ClearAllPoints()
             local point, relative, relativePoint, x, y = RimPoint(count)
@@ -772,15 +774,19 @@ local function Initialize()
     holder = CreateFrame("Frame", "VoidMarkMiniMapFrame", UIParent, "BackdropTemplate")
     holder:SetFrameStrata("BACKGROUND")
     holder:SetMovable(true)
+    -- The holder is decorative: it must not consume hover events from map pins.
+    holder:EnableMouse(false)
     holder:SetClampedToScreen(true)
     Backdrop(holder)
     Minimap:SetParent(holder)
     Minimap:SetFrameStrata("BACKGROUND")
     Minimap:SetScale(1)
+    Minimap:EnableMouse(true)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
     mapViewport = CreateFrame("Frame",nil,holder)
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-(topHeight+2))
     mapViewport:SetSize(db.size,db.size)
+    mapViewport:EnableMouse(false)
     _G.GetMinimapShape = function() return "SQUARE" end
     VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
     VM.hiddenChrome:Hide()
