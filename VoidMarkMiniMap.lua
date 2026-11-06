@@ -953,6 +953,7 @@ local function Initialize()
     Minimap:EnableMouse(true)
     Minimap:SetFrameLevel(holder:GetFrameLevel()+2)
     mapViewport = CreateFrame("Frame",nil,holder)
+    _G.VoidMarkMiniMapMapViewport = mapViewport -- Anchor for optional minimap overlays.
     mapViewport:SetPoint("TOPLEFT",holder,"TOPLEFT",4,-(topHeight+2))
     mapViewport:SetSize(db.size,db.size)
     mapViewport:EnableMouse(false)
