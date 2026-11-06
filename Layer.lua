@@ -53,6 +53,7 @@ local function Observe(unit, now)
         UpdateLabel()
     end
 end
+_G.VoidMarkMiniMapLayerRefresh = UpdateLabel
 local function Attach()
     if textLabel then return end
     local parent = _G.VoidMarkMiniMapFrame
