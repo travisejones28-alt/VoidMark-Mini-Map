@@ -72,8 +72,11 @@ local function Attach()
     overlay:SetFrameStrata("HIGH")
     overlay:SetFrameLevel(parent:GetFrameLevel() + 20)
     overlay:SetSize(125, 20)
-    -- Bottom left of the terrain, above the 32px footer and away from the corner border.
-    overlay:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 11, 43)
+    -- Anchor directly to the terrain viewport, not the outer map/header/footer.
+    -- This stays at the bottom-left of the actual map as it is resized.
+    local viewport = _G.VoidMarkMiniMapMapViewport
+    overlay:SetPoint("BOTTOMLEFT", viewport or parent, "BOTTOMLEFT",
+        viewport and 8 or 11, viewport and 8 or 43)
     overlay:EnableMouse(false)
     textLabel = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     textLabel:SetPoint("LEFT", overlay, "LEFT", 0, 0)
