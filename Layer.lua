@@ -3,8 +3,7 @@
 -- realm-wide layer numbers; modern client GUID obfuscation may prevent detection.
 local addonName = ...
 local frame = CreateFrame("Frame")
-local textLabel
-local enabled = true
+local textLabel, overlay
 local current, candidate, observedAt
 local seconds = 0
 local TTL = 120
@@ -58,10 +57,18 @@ local function Attach()
     if textLabel then return end
     local parent = _G.VoidMarkMiniMapFrame
     if not parent then return end
-    -- A FontString does not intercept minimap mouse interaction.
-    textLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    textLabel:SetPoint("TOPLEFT", parent, "TOPLEFT", 11, -53)
-    textLabel:SetFont(textLabel:GetFont(), 11, "OUTLINE")
+    -- The minimap renders above holder-owned FontStrings. Use an independent
+    -- high-strata, mouse-transparent frame so the label stays visible.
+    overlay = CreateFrame("Frame", nil, parent)
+    overlay:SetFrameStrata("HIGH")
+    overlay:SetFrameLevel(parent:GetFrameLevel() + 20)
+    overlay:SetSize(125, 20)
+    overlay:SetPoint("TOPLEFT", parent, "TOPLEFT", 11, -53)
+    overlay:EnableMouse(false)
+    textLabel = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    textLabel:SetPoint("LEFT", overlay, "LEFT", 0, 0)
+    local font = textLabel:GetFont()
+    if font then textLabel:SetFont(font, 11, "OUTLINE") end
     textLabel:SetShadowColor(0, 0, 0, 1)
     textLabel:SetShadowOffset(1, -1)
     UpdateLabel()
