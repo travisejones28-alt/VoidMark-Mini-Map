@@ -7,6 +7,7 @@ local textLabel, overlay
 local current, candidate, observedAt
 local seconds = 0
 local TTL = 120
+local diagnostics = { calls = 0, readable = 0, secret = 0, malformed = 0, creatures = 0, last = nil }
 local function isSecret(v)
     if type(issecretvalue) == "function" then
         local ok, result = pcall(issecretvalue, v)
@@ -15,11 +16,18 @@ local function isSecret(v)
     return false
 end
 local function Parse(guid)
-    if isSecret(guid) or type(guid) ~= "string" then return end
+    if isSecret(guid) then diagnostics.secret = diagnostics.secret + 1; return end
+    if type(guid) ~= "string" then return end
+    diagnostics.readable = diagnostics.readable + 1
     local kind, zero, server, map, zone, npc, spawn = strsplit("-", guid)
     if kind ~= "Creature" and kind ~= "Vehicle" then return end
-    if not (tonumber(server) and tonumber(map) and tonumber(zone) and tonumber(npc) and spawn and spawn ~= "") then return end
-    local key = server .. "-" .. map .. "-" .. zone
+    if not (tonumber(server) and tonumber(map) and tonumber(zone) and tonumber(npc) and spawn and spawn ~= "") then
+        diagnostics.malformed = diagnostics.malformed + 1
+        return
+    end
+    diagnostics.creatures = diagnostics.creatures + 1
+    diagnostics.last = server .. "-" .. map .. "-" .. zone
+    local key = diagnostics.last
     return key, zone, spawn
 end
 local function UpdateLabel()
@@ -34,7 +42,8 @@ local function UpdateLabel()
 end
 local function Observe(unit, now)
     local ok, guid = pcall(UnitGUID, unit)
-    if not ok then return end
+    if not ok then diagnostics.secret = diagnostics.secret + 1; return end
+    diagnostics.calls = diagnostics.calls + 1
     local key, zone, spawn = Parse(guid)
     if not key then return end
     if current and current.key == key then observedAt = now; candidate = nil; return end
@@ -63,7 +72,8 @@ local function Attach()
     overlay:SetFrameStrata("HIGH")
     overlay:SetFrameLevel(parent:GetFrameLevel() + 20)
     overlay:SetSize(125, 20)
-    overlay:SetPoint("TOPLEFT", parent, "TOPLEFT", 11, -53)
+    -- Bottom left of the terrain, above the 32px footer and away from the corner border.
+    overlay:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 11, 43)
     overlay:EnableMouse(false)
     textLabel = overlay:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     textLabel:SetPoint("LEFT", overlay, "LEFT", 0, 0)
@@ -110,8 +120,13 @@ SlashCmdList.VOIDMARKLAYER = function(msg)
     elseif cmd == "off" then db.layer = false
     elseif cmd == "reset" then Reset()
     elseif cmd == "debug" then
-        print("VoidMark layer estimate:", current and current.key or "unknown",
+        print("VoidMark layer:", current and current.key or "unknown",
             "candidate:", candidate and (candidate.key .. " (" .. candidate.count .. "/2)") or "none")
+        print("VoidMark GUID checks:", diagnostics.calls,
+            "readable:", diagnostics.readable, "creatures:", diagnostics.creatures,
+            "secret/errors:", diagnostics.secret, "malformed:", diagnostics.malformed)
+        print("VoidMark last creature instance:", diagnostics.last or "none",
+            "(not an official layer number)")
         return
     else
         print("VoidMark layer: /vmlayer on | off | reset | debug")
