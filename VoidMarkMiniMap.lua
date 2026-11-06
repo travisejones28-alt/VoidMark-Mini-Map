@@ -24,7 +24,7 @@ local function InEditMode()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
 local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, latency = true, purple = true,
-    coordinates = false, drawer = true, accent = "purple",
+    coordinates = false, drawer = true, layer = true, accent = "purple",
     iconScale = 1, rotate = false, headerBelow = false,
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -707,6 +707,7 @@ local function UpdateOptions()
     options.purple:SetChecked(db.purple)
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
+    options.layer:SetChecked(db.layer)
     options.headerBelow:SetChecked(db.headerBelow)
     options.iconScale:SetValue(db.iconScale)
     options.iconText:SetText(Minimap.SetIconScale and ("Native icon scale: "..math.floor(db.iconScale*100+.5).."%") or "Native icon scale: unavailable on this client")
@@ -827,7 +828,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 690)
+        options:SetSize(390, 730)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -862,7 +863,11 @@ local function ToggleOptions()
             local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             label:SetPoint("LEFT", check, "RIGHT", 2, 0)
             label:SetText(text)
-            check:SetScript("OnClick", function(self) db[key] = not not self:GetChecked(); Apply() end)
+            check:SetScript("OnClick", function(self)
+                db[key] = not not self:GetChecked()
+                if key == "layer" and _G.VoidMarkMiniMapLayerRefresh then _G.VoidMarkMiniMapLayerRefresh() end
+                Apply()
+            end)
             return check
         end
         options.clock = Check("Show server clock", -153, "clock")
@@ -874,20 +879,22 @@ local function ToggleOptions()
         options.clock24 = Check("Use 24-hour time (off: 12-hour AM/PM)", -345, "clock24")
         options.durability = Check("Show equipment durability", -377, "durability")
         options.latency = Check("Show server latency (MS)", -409, "latency")
+        options.layer = Check("Show layer indicator (experimental)", -441, "layer")
+        Tooltip(options.layer,"Layer detection","Estimates a layer ID from nearby creature GUIDs. Forever may hide this data; unknown displays as [Layer ?].")
         options.accent = Button(options,"",180,function()
             local nextColor={purple="cyan",cyan="amber",amber="purple"}
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
-        options.accent:SetPoint("TOPLEFT",22,-450)
+        options.accent:SetPoint("TOPLEFT",22,-482)
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-620)
-        compatibility:SetPoint("TOPRIGHT",-22,-620)
+        compatibility:SetPoint("TOPLEFT",22,-652)
+        compatibility:SetPoint("TOPRIGHT",-22,-652)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
-        options.headerBelow=Check("Zone header below map",-516,"headerBelow")
+        options.headerBelow=Check("Zone header below map",-548,"headerBelow")
         options.iconText=options:CreateFontString(nil,"OVERLAY","GameFontHighlight")
-        options.iconText:SetPoint("TOPLEFT",22,-558)
+        options.iconText:SetPoint("TOPLEFT",22,-590)
         options.iconScale=CreateFrame("Slider",nil,options,"OptionsSliderTemplate")
-        options.iconScale:SetPoint("TOPLEFT",24,-587)
+        options.iconScale:SetPoint("TOPLEFT",24,-619)
         options.iconScale:SetSize(340,18)
         options.iconScale:SetMinMaxValues(.5,2)
         options.iconScale:SetValueStep(.05)
