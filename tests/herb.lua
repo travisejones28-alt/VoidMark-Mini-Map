@@ -6,7 +6,8 @@ function M:SetShown(v) self.shown=not not v end
 function M:SetText(v) self.text=v end
 function M:SetTextColor(r,g,b) self.color={r,g,b} end
 function M:SetScript(k,f) self.scripts=self.scripts or {}; self.scripts[k]=f end
-function M:RegisterEvent() end
+function M:RegisterEvent(e) if e=='LEARNED_SPELL_IN_TAB' then error('Attempt to register unknown event') end end
+function M:IsShown() return self.shown end
 function M:CreateFontString() return setmetatable({},{__index=M}) end
 function M:CreateTexture() return setmetatable({},{__index=M}) end
 function M:SetBackdropBorderColor(...) self.border={...} end
@@ -27,6 +28,7 @@ function GameTooltip:Show() self.showCount=(self.showCount or 0)+1 end
 GameTooltipTextLeft1 = CreateFrame()
 function GameTooltipTextLeft1:GetText() return self.text end
 dofile('Herb.lua')
+assert(SlashCmdList.VOIDMARKHERB, 'unknown event must not stop the file loading')
 local H = VoidMarkMiniMapHerb
 assert(H.Band(120,121)=="red" and H.Band(120,120)=="orange" and H.Band(144,120)=="orange")
 assert(H.Band(145,120)=="yellow" and H.Band(170,120)=="green" and H.Band(220,120)=="grey")
@@ -65,4 +67,7 @@ local shows = GameTooltip.showCount
 hooks.OnUpdate(GameTooltip); assert(GameTooltip.showCount==shows, "no re-show when unchanged")
 VoidMarkMiniMapDB.herbTip = false; GameTooltipTextLeft1.text = "Bruiseweed"
 hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text=="Bruiseweed", "tip off")
+local printed={}; local realPrint=print; print=function(...) printed[#printed+1]=table.concat({...}," ") end
+SlashCmdList.VOIDMARKHERB(""); print=realPrint
+assert(#printed>=4 and printed[2]:find("120/150",1,true), "status shows skill")
 print("PASS: herb box")

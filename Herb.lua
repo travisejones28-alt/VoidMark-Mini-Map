@@ -144,8 +144,12 @@ local function Attach()
 end
 
 local frame = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "SKILL_LINES_CHANGED", "CHAT_MSG_SKILL", "LEARNED_SPELL_IN_TAB" }) do
-    frame:RegisterEvent(event)
+-- Some events differ between client builds; registering an unknown one throws,
+-- so each is guarded and a missing event never stops this file from loading.
+local registered = {}
+for _, event in ipairs({ "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "SKILL_LINES_CHANGED", "CHAT_MSG_SKILL",
+    "LEARNED_SPELL_IN_TAB", "LEARNED_SPELL_IN_SKILL_LINE" }) do
+    if pcall(frame.RegisterEvent, frame, event) then registered[#registered + 1] = event end
 end
 local waited = 0
 frame:SetScript("OnEvent", function()
@@ -195,10 +199,12 @@ local function Decorate(text, rank)
 end
 
 local lastTip
+local tipsSeen = 0
 local function DecorateTooltip(tooltip)
     local db = VoidMarkMiniMapDB
     if type(db) ~= "table" or db.herbTip == false then return end
     if not tooltip.GetOwner or tooltip:GetOwner() ~= Minimap then lastTip = nil; return end
+    tipsSeen = tipsSeen + 1
     local rank = skill or ReadSkill()
     if not rank then return end
     local changed = false
@@ -218,10 +224,13 @@ local function DecorateTooltip(tooltip)
         tooltip.vmHerbResizing = nil
     end
 end
+local tipHooked = false
 if GameTooltip and GameTooltip.HookScript then
-    GameTooltip:HookScript("OnShow", DecorateTooltip)
-    GameTooltip:HookScript("OnUpdate", DecorateTooltip)
-    GameTooltip:HookScript("OnHide", function() lastTip = nil end)
+    tipHooked = pcall(function()
+        GameTooltip:HookScript("OnShow", DecorateTooltip)
+        GameTooltip:HookScript("OnUpdate", DecorateTooltip)
+        GameTooltip:HookScript("OnHide", function() lastTip = nil end)
+    end)
 end
 
 SLASH_VOIDMARKHERB1 = "/vmherb"
@@ -234,8 +243,14 @@ SlashCmdList.VOIDMARKHERB = function(msg)
     elseif cmd == "off" then db.herb = false
     elseif cmd == "tip" and (arg == "on" or arg == "off") then db.herbTip = arg == "on"; return
     else
-        local rank = ReadSkill()
-        print("VoidMark herbs: /vmherb on | off (side box), /vmherb tip on | off (map label squares)  skill: " .. (rank or "Herbalism not found"))
+        local rank, maxRank = ReadSkill()
+        local skillApi = type(GetNumSkillLines) == "function" and type(GetSkillLineInfo) == "function"
+        print("|cffb366ffVoidMark herbs:|r /vmherb on|off (side box), /vmherb tip on|off (map label squares)")
+        print("  Herbalism: " .. (rank and (rank .. "/" .. (maxRank or "?")) or (skillApi and "not found in skill list" or "skill API missing")))
+        print("  Side box: " .. (box and (box:IsShown() and "shown" or "hidden") or "not attached") ..
+            " | setting " .. tostring(db.herb ~= false))
+        print("  Map label hook: " .. tostring(tipHooked) .. " | minimap labels seen: " .. tipsSeen ..
+            " | setting " .. tostring(db.herbTip ~= false))
         return
     end
     Attach()
