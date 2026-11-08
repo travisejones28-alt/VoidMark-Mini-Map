@@ -8,6 +8,7 @@ function M:SetTextColor(r,g,b) self.color={r,g,b} end
 function M:SetScript(k,f) self.scripts=self.scripts or {}; self.scripts[k]=f end
 function M:RegisterEvent(e) if e=='LEARNED_SPELL_IN_TAB' then error('Attempt to register unknown event') end end
 function M:IsShown() return self.shown end
+function M:Hide() self.shown=false end
 function M:CreateFontString() return setmetatable({},{__index=M}) end
 function M:CreateTexture() return setmetatable({},{__index=M}) end
 function M:SetBackdropBorderColor(...) self.border={...} end
@@ -17,7 +18,9 @@ SlashCmdList = {}
 local lines = { {"Professions",true}, {"Kräuterkunde",false,nil,120,nil,nil,150,182} }
 C_SkillInfo={GetNumSkillLines=function() return #lines end,
  GetSkillLineInfo=function(i) local l=lines[i]; return {name=l[1],isHeader=l[2],rank=l[4],maxRank=l[7],skillLineID=l[8]} end}
-VoidMarkMiniMapDB = { herb = true, accent = "purple", purple = true }
+local clock=100
+function GetTime() return clock end
+VoidMarkMiniMapDB = { herbHover = false, herb = true, accent = "purple", purple = true }
 Minimap = CreateFrame()
 local hooks = {}
 GameTooltip = CreateFrame()
@@ -73,6 +76,16 @@ local shows = GameTooltip.showCount
 hooks.OnUpdate(GameTooltip); assert(GameTooltip.showCount==shows, "no re-show when unchanged")
 VoidMarkMiniMapDB.herbTip = false; GameTooltipTextLeft1.text = "Bruiseweed"
 hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text=="Bruiseweed", "tip off")
+-- Hover mode: hidden until a herb label shows over the map, hides after it ends.
+VoidMarkMiniMapDB.herbTip = true; VoidMarkMiniMapDB.herbHover = true
+GameTooltip.owner = {}; GameTooltipTextLeft1.text = "Silverleaf"
+clock = clock + 5; H.Refresh(); assert(box.shown==false, "hover mode starts hidden")
+hooks.OnShow(GameTooltip); assert(box.shown==false, "non-map tooltip does not open the box")
+GameTooltip.owner = Minimap; hooks.OnUpdate(GameTooltip)
+assert(box.shown==true and box.scripts.OnUpdate, "hovering a herb shows the box")
+clock = clock + 1; box.scripts.OnUpdate(box); assert(box.shown==false, "box hides when hover ends")
+GameTooltip.owner = Minimap; GameTooltipTextLeft1.text = "Copper Vein"; hooks.OnUpdate(GameTooltip)
+assert(box.shown==false, "non-herb label keeps box hidden")
 local printed={}; local realPrint=print; print=function(...) printed[#printed+1]=table.concat({...}," ") end
 SlashCmdList.VOIDMARKHERB(""); print=realPrint
 assert(#printed>=4 and printed[2]:find("120/150",1,true), "status shows skill")

@@ -86,6 +86,9 @@ local function ReadSkill()
 end
 
 local box, title, rows
+local hoverHerb, hoverAt = nil, 0
+local HERB_REQ = {}
+for i = 1, #HERBS do HERB_REQ[HERBS[i][1]] = HERBS[i][2] end
 local skill, maxSkill
 local function Hex(c) return string.format("ff%02x%02x%02x", c[1] * 255, c[2] * 255, c[3] * 255) end
 
@@ -100,13 +103,20 @@ local function Refresh()
     if not box then return end
     local db = VoidMarkMiniMapDB
     skill, maxSkill = ReadSkill()
-    local show = type(db) == "table" and db.herb ~= false and skill ~= nil
+    local hoverMode = type(db) == "table" and db.herbHover ~= false
+    local hovering = hoverHerb and GetTime() - hoverAt < 0.35
+    local show = type(db) == "table" and db.herb ~= false and skill ~= nil and (not hoverMode or hovering)
     box:SetShown(show)
+    if box.EnableMouse then box:EnableMouse(not hoverMode) end
     if not show then return end
     local accent = ACCENTS[db.accent] or ACCENTS.purple
     if db.purple == false then accent = { 0.35, 0.35, 0.35 } end
     box:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
-    title:SetText("Herb " .. skill .. (maxSkill and maxSkill > 0 and ("/" .. maxSkill) or ""))
+    local heading = "Herb " .. skill .. (maxSkill and maxSkill > 0 and ("/" .. maxSkill) or "")
+    if hovering and HERB_REQ[hoverHerb] then
+        heading = "|c" .. Hex(COLORS[Band(skill, HERB_REQ[hoverHerb])]) .. hoverHerb .. "|r  " .. skill
+    end
+    title:SetText(heading)
     local groups = Groups(skill)
     for i, band in ipairs(BANDS) do
         local c = COLORS[band]
@@ -160,6 +170,12 @@ local function Attach()
         if text.SetWordWrap then text:SetWordWrap(false) end
         rows[i] = { swatch = swatch, text = text }
     end
+    box:SetScript("OnUpdate", function()
+        local db = VoidMarkMiniMapDB
+        if type(db) == "table" and db.herbHover ~= false and GetTime() - hoverAt >= 0.35 then
+            hoverHerb = nil; box:Hide()
+        end
+    end)
     Refresh()
     return true
 end
@@ -186,8 +202,6 @@ end)
 
 -- Minimap hover label: put a small colored square left of each herb name.
 -- Only touches GameTooltip while the minimap owns it; re-checks when text changes.
-local HERB_REQ = {}
-for i = 1, #HERBS do HERB_REQ[HERBS[i][1]] = HERBS[i][2] end
 local HERB_NAMES = {}
 for name in pairs(HERB_REQ) do HERB_NAMES[#HERB_NAMES + 1] = name end
 table.sort(HERB_NAMES, function(a, b) return #a > #b end)
@@ -224,7 +238,8 @@ local tipsSeen = 0
 local lastOwner, lastOwnerName
 local function DecorateTooltip(tooltip)
     local db = VoidMarkMiniMapDB
-    if type(db) ~= "table" or db.herbTip == false then return end
+    if type(db) ~= "table" then return end
+    local squares = db.herbTip ~= false
     local owner = tooltip.GetOwner and tooltip:GetOwner()
     local overMap = Minimap and Minimap.IsMouseOver and Minimap:IsMouseOver()
     if owner ~= Minimap and not overMap then lastTip = nil; return end
@@ -235,16 +250,27 @@ local function DecorateTooltip(tooltip)
     end
     local rank = skill or ReadSkill()
     if not rank then return end
-    local changed = false
+    local changed, found = false, nil
     local lines = tooltip.NumLines and tooltip:NumLines() or 1
     for i = 1, lines do
         local line = _G["GameTooltipTextLeft" .. i]
         local text = line and line:GetText()
+        if text and not found then
+            for _, name in ipairs(HERB_NAMES) do
+                if text:find(name, 1, true) then found = name; break end
+            end
+        end
         if text and text ~= lastTip then
-            local decorated = Decorate(text, rank)
+            local decorated = squares and Decorate(text, rank) or text
             if decorated ~= text then line:SetText(decorated); changed = true end
             if i == 1 then lastTip = decorated end
         end
+    end
+    if found then
+        local wasShown = hoverHerb ~= nil and GetTime() - hoverAt < 0.35
+        local wasHerb = hoverHerb
+        hoverHerb, hoverAt = found, GetTime()
+        if not wasShown or wasHerb ~= found then Refresh() end
     end
     if changed and not tooltip.vmHerbResizing then
         tooltip.vmHerbResizing = true
@@ -257,8 +283,39 @@ if GameTooltip and GameTooltip.HookScript then
     tipHooked = pcall(function()
         GameTooltip:HookScript("OnShow", DecorateTooltip)
         GameTooltip:HookScript("OnUpdate", DecorateTooltip)
-        GameTooltip:HookScript("OnHide", function() lastTip = nil; lastOwner = nil end)
+        GameTooltip:HookScript("OnHide", function() lastTip = nil; lastOwner = nil; hoverAt = 0 end)
     end)
+end
+-- Newer clients route minimap hover text through TooltipDataProcessor.
+local dataHooked = false
+if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
+    and type(Enum) == "table" and type(Enum.TooltipDataType) == "table" and Enum.TooltipDataType.MinimapMouseover then
+    dataHooked = pcall(TooltipDataProcessor.AddTooltipPostCall, Enum.TooltipDataType.MinimapMouseover,
+        function(tooltip) if tooltip == GameTooltip then DecorateTooltip(tooltip) end end)
+end
+
+-- /vmherb scan: report what is under the mouse 3 seconds later (hover a herb meanwhile).
+local function FrameName(f)
+    if not f then return "none" end
+    local ok, name = pcall(function() return f.GetName and f:GetName() end)
+    return (ok and name) or tostring(f.GetObjectType and f:GetObjectType() or "frame")
+end
+local function Scan()
+    local out = {}
+    out[#out + 1] = "over map: " .. tostring(Minimap and Minimap.IsMouseOver and Minimap:IsMouseOver())
+    local foci = {}
+    if type(GetMouseFoci) == "function" then foci = GetMouseFoci() or {}
+    elseif type(GetMouseFocus) == "function" then foci = { GetMouseFocus() } end
+    local names = {}
+    for i = 1, math.min(#foci, 4) do names[#names + 1] = FrameName(foci[i]) end
+    out[#out + 1] = "mouse focus: " .. (#names > 0 and table.concat(names, ", ") or "none")
+    local gt = GameTooltip
+    local shown = gt and gt.IsShown and gt:IsShown()
+    local first = _G.GameTooltipTextLeft1 and _G.GameTooltipTextLeft1:GetText()
+    out[#out + 1] = "GameTooltip: " .. (shown and "shown" or "hidden") .. " | owner " ..
+        FrameName(gt and gt.GetOwner and gt:GetOwner()) .. " | text " .. tostring(first and first:gsub("|", "||") or "none")
+    out[#out + 1] = "data hook: " .. tostring(dataHooked) .. " | herb detected: " .. tostring(hoverHerb or "none")
+    for _, line in ipairs(out) do print("  " .. line) end
 end
 
 SLASH_VOIDMARKHERB1 = "/vmherb"
@@ -270,12 +327,18 @@ SlashCmdList.VOIDMARKHERB = function(msg)
     if cmd == "on" then db.herb = true
     elseif cmd == "off" then db.herb = false
     elseif cmd == "tip" and (arg == "on" or arg == "off") then db.herbTip = arg == "on"; return
+    elseif cmd == "hover" then db.herb = true; db.herbHover = true
+    elseif cmd == "always" then db.herb = true; db.herbHover = false
+    elseif cmd == "scan" then
+        print("|cffb366ffVoidMark herbs:|r hover a herb on the map now; scanning in 3 seconds...")
+        if C_Timer and C_Timer.After then C_Timer.After(3, Scan) else Scan() end
+        return
     else
         local rank, maxRank = ReadSkill()
-        print("|cffb366ffVoidMark herbs:|r /vmherb on|off (side box), /vmherb tip on|off (map label squares)")
+        print("|cffb366ffVoidMark herbs:|r /vmherb on|off, hover|always (box only on herb hover, or always), tip on|off, scan")
         print("  Herbalism: " .. (rank and (rank .. "/" .. (maxRank or "?")) or "not found (no Herbalism on this character?)"))
         print("  Side box: " .. (box and (box:IsShown() and "shown" or "hidden") or "not attached") ..
-            " | setting " .. tostring(db.herb ~= false))
+            " | setting " .. tostring(db.herb ~= false) .. " | mode " .. (db.herbHover ~= false and "hover" or "always"))
         print("  Map label hook: " .. tostring(tipHooked) .. " | map tooltips seen: " .. tipsSeen .. " (last owner: " .. (lastOwnerName or "none") .. ")" ..
             " | setting " .. tostring(db.herbTip ~= false))
         return
@@ -286,4 +349,4 @@ end
 
 -- Exposed for tests.
 _G.VoidMarkMiniMapHerb = { Band = Band, Groups = Groups, ReadSkill = ReadSkill, Attach = Attach, Refresh = Refresh,
-    Box = function() return box end, Decorate = Decorate, DecorateTooltip = DecorateTooltip }
+    Box = function() return box end, Scan = Scan, Decorate = Decorate, DecorateTooltip = DecorateTooltip }
