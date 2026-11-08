@@ -24,7 +24,7 @@ local function InEditMode()
 end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
 local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, latency = true, purple = true,
-    coordinates = false, drawer = true, layer = true, accent = "purple",
+    coordinates = false, drawer = true, layer = true, herb = true, accent = "purple",
     iconScale = 1, rotate = false, headerBelow = false,
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
@@ -708,6 +708,7 @@ local function UpdateOptions()
     options.coordinates:SetChecked(db.coordinates)
     options.drawer:SetChecked(db.drawer)
     options.layer:SetChecked(db.layer)
+    options.herb:SetChecked(db.herb)
     options.headerBelow:SetChecked(db.headerBelow)
     options.iconScale:SetValue(db.iconScale)
     options.iconText:SetText(Minimap.SetIconScale and ("Native icon scale: "..math.floor(db.iconScale*100+.5).."%") or "Native icon scale: unavailable on this client")
@@ -866,6 +867,7 @@ local function ToggleOptions()
             check:SetScript("OnClick", function(self)
                 db[key] = not not self:GetChecked()
                 if key == "layer" and _G.VoidMarkMiniMapLayerRefresh then _G.VoidMarkMiniMapLayerRefresh() end
+                if _G.VoidMarkMiniMapHerbRefresh then _G.VoidMarkMiniMapHerbRefresh() end
                 Apply()
             end)
             return check
@@ -886,6 +888,8 @@ local function ToggleOptions()
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
         options.accent:SetPoint("TOPLEFT",22,-482)
+        options.herb = Check("Show herb skill box (left of map)", -514, "herb")
+        Tooltip(options.herb,"Herb skill box","Colors herbs red/orange/yellow/green/grey for your Herbalism skill. Hidden if you don't have Herbalism.")
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
         compatibility:SetPoint("TOPLEFT",22,-652)
         compatibility:SetPoint("TOPRIGHT",-22,-652)
