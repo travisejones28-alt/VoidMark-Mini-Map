@@ -159,16 +159,83 @@ frame:SetScript("OnUpdate", function(self, dt)
     if Attach() then self:SetScript("OnUpdate", nil) end
 end)
 
+-- Minimap hover label: put a small colored square left of each herb name.
+-- Only touches GameTooltip while the minimap owns it; re-checks when text changes.
+local HERB_REQ = {}
+for i = 1, #HERBS do HERB_REQ[HERBS[i][1]] = HERBS[i][2] end
+local HERB_NAMES = {}
+for name in pairs(HERB_REQ) do HERB_NAMES[#HERB_NAMES + 1] = name end
+table.sort(HERB_NAMES, function(a, b) return #a > #b end)
+local SQUARE_PREFIX = "|TInterface\\Buttons\\WHITE8X8:10:10:0:0:8:8:0:8:0:8:"
+local function Square(band)
+    local c = COLORS[band]
+    return SQUARE_PREFIX .. math.floor(c[1] * 255) .. ":" .. math.floor(c[2] * 255) .. ":" .. math.floor(c[3] * 255) .. "|t "
+end
+local function Escape(s) return (s:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")) end
+
+-- Returns the text with a square before each known herb name (idempotent).
+local function Decorate(text, rank)
+    if type(text) ~= "string" or text == "" or not rank then return text end
+    text = text:gsub("|TInterface\\Buttons\\WHITE8X8:10:10:[^|]*|t ", "")
+    local taken = {}
+    for _, name in ipairs(HERB_NAMES) do
+        local s, e = text:find(name, 1, true)
+        while s do
+            local covered = false
+            for _, span in ipairs(taken) do if s >= span[1] and e <= span[2] then covered = true end end
+            if not covered then taken[#taken + 1] = { s, e, name } end
+            s, e = text:find(name, e + 1, true)
+        end
+    end
+    table.sort(taken, function(a, b) return a[1] > b[1] end)
+    for _, span in ipairs(taken) do
+        text = text:sub(1, span[1] - 1) .. Square(Band(rank, HERB_REQ[span[3]])) .. text:sub(span[1])
+    end
+    return text
+end
+
+local lastTip
+local function DecorateTooltip(tooltip)
+    local db = VoidMarkMiniMapDB
+    if type(db) ~= "table" or db.herbTip == false then return end
+    if not tooltip.GetOwner or tooltip:GetOwner() ~= Minimap then lastTip = nil; return end
+    local rank = skill or ReadSkill()
+    if not rank then return end
+    local changed = false
+    local lines = tooltip.NumLines and tooltip:NumLines() or 1
+    for i = 1, lines do
+        local line = _G["GameTooltipTextLeft" .. i]
+        local text = line and line:GetText()
+        if text and text ~= lastTip then
+            local decorated = Decorate(text, rank)
+            if decorated ~= text then line:SetText(decorated); changed = true end
+            if i == 1 then lastTip = decorated end
+        end
+    end
+    if changed and not tooltip.vmHerbResizing then
+        tooltip.vmHerbResizing = true
+        tooltip:Show()
+        tooltip.vmHerbResizing = nil
+    end
+end
+if GameTooltip and GameTooltip.HookScript then
+    GameTooltip:HookScript("OnShow", DecorateTooltip)
+    GameTooltip:HookScript("OnUpdate", DecorateTooltip)
+    GameTooltip:HookScript("OnHide", function() lastTip = nil end)
+end
+
 SLASH_VOIDMARKHERB1 = "/vmherb"
 SlashCmdList.VOIDMARKHERB = function(msg)
     local db = VoidMarkMiniMapDB
     if type(db) ~= "table" then print("VoidMark Mini Map is not initialized."); return end
     local cmd = ((msg or ""):match("^%s*(%S*)") or ""):lower()
+    local arg = ((msg or ""):match("^%s*%S+%s+(%S+)") or ""):lower()
     if cmd == "on" then db.herb = true
     elseif cmd == "off" then db.herb = false
+    elseif cmd == "tip" and (arg == "on" or arg == "off") then db.herbTip = arg == "on"; return
     else
         local rank = ReadSkill()
-        print("VoidMark herb box: /vmherb on | off  (skill: " .. (rank or "Herbalism not found") .. ")")
+        print("VoidMark herbs: /vmherb on | off (side box), /vmherb tip on | off (map label squares)  skill: " .. (rank or "Herbalism not found"))
         return
     end
     Attach()
@@ -177,4 +244,4 @@ end
 
 -- Exposed for tests.
 _G.VoidMarkMiniMapHerb = { Band = Band, Groups = Groups, ReadSkill = ReadSkill, Attach = Attach, Refresh = Refresh,
-    Box = function() return box end }
+    Box = function() return box end, Decorate = Decorate, DecorateTooltip = DecorateTooltip }

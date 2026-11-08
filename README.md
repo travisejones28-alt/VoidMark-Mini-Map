@@ -167,7 +167,12 @@ in-game verification checklist. Rotation remains a shared Blizzard setting.
 0.3.1 handles Forever's delayed rotation mask reset, suppresses its circular
 compass underlay, and places the envelope inside the map's top-left corner.
 
-## Herb skill box (0.3.7)
+## Herb colors (0.3.8)
+
+Hovering a herb on the map now shows a small colored square left of its name
+(red / orange / yellow / green / grey for your Herbalism skill). `/vmherb tip on|off`.
+
+### Herb skill box (0.3.7)
 
 A small box on the left side of the map shows your Herbalism skill and which herbs are
 red / orange / yellow / green / grey for you (Classic gathering colors: orange until

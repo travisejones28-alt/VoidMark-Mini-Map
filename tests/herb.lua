@@ -17,6 +17,15 @@ local lines = { {"Professions",true}, {"Herbalism",false,nil,120,nil,nil,150} }
 function GetNumSkillLines() return #lines end
 function GetSkillLineInfo(i) local l=lines[i]; return l[1],l[2],l[3],l[4],l[5],l[6],l[7] end
 VoidMarkMiniMapDB = { herb = true, accent = "purple", purple = true }
+Minimap = CreateFrame()
+local hooks = {}
+GameTooltip = CreateFrame()
+function GameTooltip:HookScript(k,f) hooks[k]=f end
+function GameTooltip:GetOwner() return self.owner end
+function GameTooltip:NumLines() return 1 end
+function GameTooltip:Show() self.showCount=(self.showCount or 0)+1 end
+GameTooltipTextLeft1 = CreateFrame()
+function GameTooltipTextLeft1:GetText() return self.text end
 dofile('Herb.lua')
 local H = VoidMarkMiniMapHerb
 assert(H.Band(120,121)=="red" and H.Band(120,120)=="orange" and H.Band(144,120)=="orange")
@@ -37,4 +46,23 @@ SlashCmdList.VOIDMARKHERB("on"); assert(VoidMarkMiniMapDB.herb==true)
 lines = { {"Professions",true}, {"Mining",false,nil,50} }
 H.Refresh()
 assert(H.ReadSkill()==nil and box.shown==false, "no herbalism -> hidden")
+-- Map hover label squares (skill 120).
+local D = H.Decorate
+local m = D("Mageroyal", 120)
+assert(m:find("WHITE8X8",1,true) and m:find(":63:191:63|t Mageroyal",1,true), "Mageroyal is green at 120: "..m)
+assert(D(m,120)==m, "decorating twice must not add a second square")
+local multi = D("|TInterface\\Minimap\\Tracking:0|t Earthroot\nKingsblood", 120)
+assert(multi:find(":0:0|t Kingsblood",1,true) == nil and multi:find(":255:33:33|t Kingsblood",1,true), "Kingsblood red")
+assert(multi:find(":140:140:140|t Earthroot",1,true), "Earthroot grey at 120")
+assert(D("Copper Vein",120)=="Copper Vein")
+lines = { {"Professions",true}, {"Herbalism",false,nil,120,nil,nil,150} }
+H.Refresh()
+GameTooltip.owner = {}; GameTooltipTextLeft1.text = "Mageroyal"
+hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text=="Mageroyal", "only minimap tooltips are touched")
+GameTooltip.owner = Minimap
+hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text:find("|t Mageroyal",1,true))
+local shows = GameTooltip.showCount
+hooks.OnUpdate(GameTooltip); assert(GameTooltip.showCount==shows, "no re-show when unchanged")
+VoidMarkMiniMapDB.herbTip = false; GameTooltipTextLeft1.text = "Bruiseweed"
+hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text=="Bruiseweed", "tip off")
 print("PASS: herb box")
