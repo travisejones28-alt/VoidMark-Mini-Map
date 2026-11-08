@@ -52,14 +52,35 @@ local function Groups(skill)
     return groups
 end
 
+local HERB_LINE = 182 -- Herbalism skill line ID
+local function IsHerb(id, name) return id == HERB_LINE or SKILL_NAMES[name] end
+-- Forever: GetProfessions/GetProfessionInfo and C_SkillInfo; legacy skill list last.
 local function ReadSkill()
-    if type(GetNumSkillLines) ~= "function" or type(GetSkillLineInfo) ~= "function" then return end
-    local ok, count = pcall(GetNumSkillLines)
-    if not ok or type(count) ~= "number" then return end
-    for i = 1, count do
-        local okLine, name, isHeader, _, rank, _, _, maxRank = pcall(GetSkillLineInfo, i)
-        if okLine and not isHeader and SKILL_NAMES[name] and type(rank) == "number" then
-            return rank, maxRank
+    if type(GetProfessions) == "function" and type(GetProfessionInfo) == "function" then
+        local ok, a, b, c, d, e = pcall(GetProfessions)
+        if ok then
+            for _, index in pairs({ a, b, c, d, e }) do
+                local okInfo, name, _, rank, maxRank, _, _, line = pcall(GetProfessionInfo, index)
+                if okInfo and IsHerb(line, name) and type(rank) == "number" then return rank, maxRank end
+            end
+        end
+    end
+    local api = C_SkillInfo
+    if type(api) == "table" and type(api.GetNumSkillLines) == "function" and type(api.GetSkillLineInfo) == "function" then
+        local ok, count = pcall(api.GetNumSkillLines)
+        for i = 1, (ok and type(count) == "number") and count or 0 do
+            local okLine, info = pcall(api.GetSkillLineInfo, i)
+            if okLine and type(info) == "table" and not info.isHeader and IsHerb(info.skillLineID, info.name)
+                and type(info.rank) == "number" then
+                return info.rank, info.maxRank
+            end
+        end
+    end
+    if type(GetNumSkillLines) == "function" and type(GetSkillLineInfo) == "function" then
+        local ok, count = pcall(GetNumSkillLines)
+        for i = 1, (ok and type(count) == "number") and count or 0 do
+            local okLine, name, isHeader, _, rank, _, _, maxRank = pcall(GetSkillLineInfo, i)
+            if okLine and not isHeader and SKILL_NAMES[name] and type(rank) == "number" then return rank, maxRank end
         end
     end
 end
@@ -200,11 +221,18 @@ end
 
 local lastTip
 local tipsSeen = 0
+local lastOwner, lastOwnerName
 local function DecorateTooltip(tooltip)
     local db = VoidMarkMiniMapDB
     if type(db) ~= "table" or db.herbTip == false then return end
-    if not tooltip.GetOwner or tooltip:GetOwner() ~= Minimap then lastTip = nil; return end
-    tipsSeen = tipsSeen + 1
+    local owner = tooltip.GetOwner and tooltip:GetOwner()
+    local overMap = Minimap and Minimap.IsMouseOver and Minimap:IsMouseOver()
+    if owner ~= Minimap and not overMap then lastTip = nil; return end
+    if owner ~= lastOwner then
+        lastOwner = owner
+        lastOwnerName = owner and owner.GetName and owner:GetName() or (owner and "unnamed frame") or "none"
+        tipsSeen = tipsSeen + 1
+    end
     local rank = skill or ReadSkill()
     if not rank then return end
     local changed = false
@@ -229,7 +257,7 @@ if GameTooltip and GameTooltip.HookScript then
     tipHooked = pcall(function()
         GameTooltip:HookScript("OnShow", DecorateTooltip)
         GameTooltip:HookScript("OnUpdate", DecorateTooltip)
-        GameTooltip:HookScript("OnHide", function() lastTip = nil end)
+        GameTooltip:HookScript("OnHide", function() lastTip = nil; lastOwner = nil end)
     end)
 end
 
@@ -244,12 +272,11 @@ SlashCmdList.VOIDMARKHERB = function(msg)
     elseif cmd == "tip" and (arg == "on" or arg == "off") then db.herbTip = arg == "on"; return
     else
         local rank, maxRank = ReadSkill()
-        local skillApi = type(GetNumSkillLines) == "function" and type(GetSkillLineInfo) == "function"
         print("|cffb366ffVoidMark herbs:|r /vmherb on|off (side box), /vmherb tip on|off (map label squares)")
-        print("  Herbalism: " .. (rank and (rank .. "/" .. (maxRank or "?")) or (skillApi and "not found in skill list" or "skill API missing")))
+        print("  Herbalism: " .. (rank and (rank .. "/" .. (maxRank or "?")) or "not found (no Herbalism on this character?)"))
         print("  Side box: " .. (box and (box:IsShown() and "shown" or "hidden") or "not attached") ..
             " | setting " .. tostring(db.herb ~= false))
-        print("  Map label hook: " .. tostring(tipHooked) .. " | minimap labels seen: " .. tipsSeen ..
+        print("  Map label hook: " .. tostring(tipHooked) .. " | map tooltips seen: " .. tipsSeen .. " (last owner: " .. (lastOwnerName or "none") .. ")" ..
             " | setting " .. tostring(db.herbTip ~= false))
         return
     end

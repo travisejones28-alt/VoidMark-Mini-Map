@@ -14,9 +14,9 @@ function M:SetBackdropBorderColor(...) self.border={...} end
 for _,k in ipairs({"SetBackdrop","SetBackdropColor","EnableMouse","SetWidth","SetJustifyH","SetWordWrap","SetColorTexture"}) do M[k]=function() end end
 function CreateFrame() return setmetatable({},{__index=M}) end
 SlashCmdList = {}
-local lines = { {"Professions",true}, {"Herbalism",false,nil,120,nil,nil,150} }
-function GetNumSkillLines() return #lines end
-function GetSkillLineInfo(i) local l=lines[i]; return l[1],l[2],l[3],l[4],l[5],l[6],l[7] end
+local lines = { {"Professions",true}, {"Kräuterkunde",false,nil,120,nil,nil,150,182} }
+C_SkillInfo={GetNumSkillLines=function() return #lines end,
+ GetSkillLineInfo=function(i) local l=lines[i]; return {name=l[1],isHeader=l[2],rank=l[4],maxRank=l[7],skillLineID=l[8]} end}
 VoidMarkMiniMapDB = { herb = true, accent = "purple", purple = true }
 Minimap = CreateFrame()
 local hooks = {}
@@ -37,6 +37,9 @@ assert(g.red[1]=="Kingsblood", "red should list next unlock first")
 assert(g.orange[1]=="Grave Moss" and #g.orange==3, "orange: Grave Moss, Wild Steelbloom, Bruiseweed")
 assert(g.yellow[1]=="Stranglekelp" and g.green[1]=="Briarthorn" and g.grey[1]=="Earthroot")
 local rank,maxRank = H.ReadSkill(); assert(rank==120 and maxRank==150)
+function GetProfessions() return 3, nil, nil, 7 end
+function GetProfessionInfo(i) if i==3 then return "Herbalism","icon",205,225,0,0,182 end return "Fishing","icon",1,75,0,0,356 end
+assert(H.ReadSkill()==205, "GetProfessions path"); GetProfessions=nil; GetProfessionInfo=nil
 -- No minimap frame yet: attach waits.
 assert(H.Attach()==false)
 VoidMarkMiniMapFrame = CreateFrame()
@@ -45,7 +48,7 @@ local box = H.Box(); assert(box.shown==true and box.point[2]==VoidMarkMiniMapFra
 -- Find box through refresh side effects: re-run with skill removed hides it.
 SlashCmdList.VOIDMARKHERB("off"); assert(VoidMarkMiniMapDB.herb==false)
 SlashCmdList.VOIDMARKHERB("on"); assert(VoidMarkMiniMapDB.herb==true)
-lines = { {"Professions",true}, {"Mining",false,nil,50} }
+lines = { {"Professions",true}, {"Mining",false,nil,50,nil,nil,75,186} }
 H.Refresh()
 assert(H.ReadSkill()==nil and box.shown==false, "no herbalism -> hidden")
 -- Map hover label squares (skill 120).
@@ -57,10 +60,13 @@ local multi = D("|TInterface\\Minimap\\Tracking:0|t Earthroot\nKingsblood", 120)
 assert(multi:find(":0:0|t Kingsblood",1,true) == nil and multi:find(":255:33:33|t Kingsblood",1,true), "Kingsblood red")
 assert(multi:find(":140:140:140|t Earthroot",1,true), "Earthroot grey at 120")
 assert(D("Copper Vein",120)=="Copper Vein")
-lines = { {"Professions",true}, {"Herbalism",false,nil,120,nil,nil,150} }
+lines = { {"Professions",true}, {"Kräuterkunde",false,nil,120,nil,nil,150,182} }
 H.Refresh()
 GameTooltip.owner = {}; GameTooltipTextLeft1.text = "Mageroyal"
 hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text=="Mageroyal", "only minimap tooltips are touched")
+function Minimap:IsMouseOver() return true end
+hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text:find("|t Mageroyal",1,true), "tooltip over the map counts even with another owner")
+Minimap.IsMouseOver=nil; GameTooltipTextLeft1.text="Mageroyal"
 GameTooltip.owner = Minimap
 hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text:find("|t Mageroyal",1,true))
 local shows = GameTooltip.showCount
