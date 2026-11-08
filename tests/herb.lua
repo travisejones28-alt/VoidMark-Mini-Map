@@ -20,7 +20,7 @@ C_SkillInfo={GetNumSkillLines=function() return #lines end,
  GetSkillLineInfo=function(i) local l=lines[i]; return {name=l[1],isHeader=l[2],rank=l[4],maxRank=l[7],skillLineID=l[8]} end}
 local clock=100
 function GetTime() return clock end
-VoidMarkMiniMapDB = { herbHover = false, herb = true, accent = "purple", purple = true }
+VoidMarkMiniMapDB = { herb = true, accent = "purple", purple = true }
 Minimap = CreateFrame()
 local hooks = {}
 GameTooltip = CreateFrame()
@@ -35,10 +35,6 @@ assert(SlashCmdList.VOIDMARKHERB, 'unknown event must not stop the file loading'
 local H = VoidMarkMiniMapHerb
 assert(H.Band(120,121)=="red" and H.Band(120,120)=="orange" and H.Band(144,120)=="orange")
 assert(H.Band(145,120)=="yellow" and H.Band(170,120)=="green" and H.Band(220,120)=="grey")
-local g = H.Groups(120)
-assert(g.red[1]=="Kingsblood", "red should list next unlock first")
-assert(g.orange[1]=="Grave Moss" and #g.orange==3, "orange: Grave Moss, Wild Steelbloom, Bruiseweed")
-assert(g.yellow[1]=="Stranglekelp" and g.green[1]=="Briarthorn" and g.grey[1]=="Earthroot")
 local rank,maxRank = H.ReadSkill(); assert(rank==120 and maxRank==150)
 function GetProfessions() return 3, nil, nil, 7 end
 function GetProfessionInfo(i) if i==3 then return "Herbalism","icon",205,225,0,0,182 end return "Fishing","icon",1,75,0,0,356 end
@@ -47,7 +43,7 @@ assert(H.ReadSkill()==205, "GetProfessions path"); GetProfessions=nil; GetProfes
 assert(H.Attach()==false)
 VoidMarkMiniMapFrame = CreateFrame()
 assert(H.Attach()==true)
-local box = H.Box(); assert(box.shown==true and box.point[2]==VoidMarkMiniMapFrame and box.point[3]=="TOPLEFT")
+local box = H.Box(); assert(box.shown==false and box.point[2]==VoidMarkMiniMapFrame and box.point[3]=="TOPLEFT", "hidden until a herb is hovered")
 -- Find box through refresh side effects: re-run with skill removed hides it.
 SlashCmdList.VOIDMARKHERB("off"); assert(VoidMarkMiniMapDB.herb==false)
 SlashCmdList.VOIDMARKHERB("on"); assert(VoidMarkMiniMapDB.herb==true)
@@ -77,12 +73,15 @@ hooks.OnUpdate(GameTooltip); assert(GameTooltip.showCount==shows, "no re-show wh
 VoidMarkMiniMapDB.herbTip = false; GameTooltipTextLeft1.text = "Bruiseweed"
 hooks.OnShow(GameTooltip); assert(GameTooltipTextLeft1.text=="Bruiseweed", "tip off")
 -- Hover mode: hidden until a herb label shows over the map, hides after it ends.
-VoidMarkMiniMapDB.herbTip = true; VoidMarkMiniMapDB.herbHover = true
+VoidMarkMiniMapDB.herbTip = true
 GameTooltip.owner = {}; GameTooltipTextLeft1.text = "Silverleaf"
 clock = clock + 5; H.Refresh(); assert(box.shown==false, "hover mode starts hidden")
 hooks.OnShow(GameTooltip); assert(box.shown==false, "non-map tooltip does not open the box")
 GameTooltip.owner = Minimap; hooks.OnUpdate(GameTooltip)
 assert(box.shown==true and box.scripts.OnUpdate, "hovering a herb shows the box")
+local lbl = H.Label(); assert(lbl.text=="Silverleaf  no skill-up" and lbl.color[1]<0.6, lbl.text)
+clock = clock + 1; GameTooltipTextLeft1.text = "Kingsblood"; hooks.OnUpdate(GameTooltip)
+assert(lbl.text=="Kingsblood  needs 125" and lbl.color[1]==1 and lbl.color[2]<0.2, lbl.text)
 clock = clock + 1; box.scripts.OnUpdate(box); assert(box.shown==false, "box hides when hover ends")
 GameTooltip.owner = Minimap; GameTooltipTextLeft1.text = "Copper Vein"; hooks.OnUpdate(GameTooltip)
 assert(box.shown==false, "non-herb label keeps box hidden")
