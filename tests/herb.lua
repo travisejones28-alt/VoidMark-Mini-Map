@@ -113,5 +113,12 @@ assert(H.BandOf(180,"Liferoot")=="red" and VoidMarkMiniMapDB.herbLearn["Liferoot
 -- Non-skill second line is ignored.
 GameTooltipTextLeft1.text = "Fadeleaf"; GameTooltipTextLeft2.text = "Level 30"; GameTooltipTextLeft2.rgb = {1,1,0}
 hooks.OnShow(GameTooltip); assert(VoidMarkMiniMapDB.herbLearn["Fadeleaf"]==nil)
+-- Secret tooltip text (Forever unit/combat tooltips) is skipped, never indexed.
+issecretvalue=function(v) return v=="SECRET" end
+GameTooltipTextLeft1.text = "SECRET"; hooks.OnUpdate(GameTooltip)
+GameTooltipTextLeft1.text = "Wild Steelbloom"; GameTooltipTextLeft2.text = "SECRET"; hooks.OnUpdate(GameTooltip)
+GameTooltip.owner = Minimap; GameTooltipTextLeft1.text = "SECRET"; hooks.OnUpdate(GameTooltip)
+assert(GameTooltipTextLeft1.text=="SECRET", "secret map text untouched"); GameTooltip.owner = {}
+issecretvalue=nil
 SlashCmdList.VOIDMARKHERB("reset"); assert(VoidMarkMiniMapDB.herbLearn==nil and H.BandOf(169,"Wild Steelbloom")=="green")
 print("PASS: herb box")

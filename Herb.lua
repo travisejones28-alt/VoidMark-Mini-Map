@@ -256,15 +256,24 @@ local tipsSeen = 0
 -- World tooltip (hovering the herb itself): line 2 is the skill name in the game's
 -- difficulty color. Read it and learn; cheap early-outs since this runs per frame.
 local lastWorld, lastLearnKey
+-- Forever marks some tooltip text and colors as secret (unit/combat tooltips);
+-- those cannot be used as table keys or compared, so skip them.
+local function Secret(v)
+    if type(issecretvalue) ~= "function" then return false end
+    local ok, result = pcall(issecretvalue, v)
+    return not ok or result == true
+end
 local function WorldRead()
     local first, second = _G.GameTooltipTextLeft1, _G.GameTooltipTextLeft2
     local name = first and first.GetText and first:GetText()
-    if not name or not HERB_REQ[name] or not second or not second.GetText then return end
+    if type(name) ~= "string" or Secret(name) or not HERB_REQ[name] then return end
+    if not second or not second.GetText then return end
     local text = second:GetText()
-    if type(text) ~= "string" then return end
+    if type(text) ~= "string" or Secret(text) then return end
     local rank = skill or ReadSkill()
     local r, g, b
     if second.GetTextColor then r, g, b = second:GetTextColor() end
+    if Secret(r) or Secret(g) or Secret(b) then return end
     local key = name .. "|" .. tostring(rank) .. "|" .. text .. "|" .. tostring(r) .. tostring(g) .. tostring(b)
     if key == lastLearnKey then return end
     lastLearnKey = key
@@ -295,6 +304,7 @@ local function DecorateTooltip(tooltip)
     for i = 1, lines do
         local line = _G["GameTooltipTextLeft" .. i]
         local text = line and line:GetText()
+        if type(text) ~= "string" or Secret(text) then text = nil end
         if text and not found then
             for _, name in ipairs(HERB_NAMES) do
                 if text:find(name, 1, true) then found = name; break end
