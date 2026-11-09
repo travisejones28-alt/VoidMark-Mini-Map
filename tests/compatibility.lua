@@ -30,10 +30,10 @@ return function(t)
  assert(mail.point==anchor and mail.parent==VoidMarkMiniMapFrame,'Mail follows stable viewport anchor')
  assert(not MinimapCluster.mouse and not MinimapCluster.Selection.mouse,'Transparent native hit regions disabled')
  assert(not Minimap.ZoomHitArea:IsShown(),'Native zoom hit area suppressed')
- assert(Minimap:IsShown() and Minimap.mouse and Minimap.parent==VoidMarkMiniMapFrame,'Renderer survives')
+ assert(Minimap:IsShown() and Minimap.mouse and Minimap.parent==VoidMarkMiniMapMapViewport,'Renderer survives')
  for _,value in ipairs({.5,2,1.25,.5,1.25})do
   VoidMarkMiniMapOptions.iconScale:SetValue(value)
-  assert(Minimap.iconScale==value and Minimap:GetScale()==1 and Minimap.width==420,'Icon size must not compound terrain scale')
+  assert(Minimap.iconScale==value and MapSize()==420,'Icon size must not compound terrain scale')
  end
  option('rotate',true);assert(GetCVar('rotateMinimap')=='1')
  -- Forever delivers its native CVar update after our initial layout. The

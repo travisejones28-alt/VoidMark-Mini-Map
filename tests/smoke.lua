@@ -33,6 +33,8 @@ function Methods:GetHeight() return self.height or 100 end
 function Methods:GetScale() return self.scale or 1 end
 function Methods:SetScale(v) self.scale=v end
 function Methods:GetEffectiveScale() return 0.8 end
+-- Effective map size: the addon keeps the native size and scales the minimap.
+function MapSize() return math.floor((Minimap.width or 0)*(Minimap.scale or 1)+0.5) end
 function Methods:GetLeft() return 400 end
 function Methods:GetTop() return 900 end
 function Methods:SetPoint(...) self.point={...} end
@@ -158,7 +160,7 @@ if VMM_TEST_CONFLICT then
     realPrint("PASS: active minimap conflict pauses styling")
     return
 end
-assert(Minimap.width==300 and Minimap.height==300)
+assert(MapSize()==300 and Minimap.width==Minimap.height)
 if VMM_TEST_SAVED_SETTINGS then
  assert(VoidMarkMiniMapDB.durability==false,"Saved durability-off preference was overwritten")
  event("PLAYER_ENTERING_WORLD")
@@ -175,19 +177,20 @@ assert(VoidMarkMiniMapDB.point=="TOPLEFT" and VoidMarkMiniMapDB.x>=0)
 assert(VoidMarkMiniMapDB.locked==true)
 assert(MinimapCluster.Tracking.parent==VoidMarkMiniMapFrame)
 assert(MinimapCluster.MailFrame.parent~=VoidMarkMiniMapFrame and not MinimapCluster.MailFrame:IsShown(),"Native mail must stay suppressed")
+do local p=MinimapCluster.MailFrame:GetParent(); assert(p and type(p.Layout)=="function" and type(p.MarkDirty)=="function","Hidden mail parent must answer Blizzard Layout calls (UPDATE_PENDING_MAIL)"); p:Layout() end
 assert(GameTimeFrame.parent~=VoidMarkMiniMapFrame and not GameTimeFrame:IsShown())
 command("size 420")
-assert(Minimap.width==420)
+assert(MapSize()==420)
 command("size 99999")
-assert(Minimap.width==600)
+assert(MapSize()==600)
 command("size nonsense")
-assert(Minimap.width==600)
+assert(MapSize()==600)
 combat=true
 command("size 240")
-assert(Minimap.width==600,"Must not resize during combat")
+assert(MapSize()==600,"Must not resize during combat")
 combat=false
 event("PLAYER_REGEN_ENABLED")
-assert(Minimap.width==240)
+assert(MapSize()==240)
 command("unlock")
 assert(VoidMarkMiniMapDB.locked==false)
 local drag
@@ -208,7 +211,7 @@ command("size 320")
 assert(VoidMarkMiniMapOptions.status.text=="Changes queued until combat ends.")
 combat=false
 event("PLAYER_REGEN_ENABLED")
-assert(Minimap.width==320)
+assert(MapSize()==320)
 command("unlock")
 local grip=VoidMarkMiniMapResize
 grip.scripts.OnDragStart()
@@ -216,7 +219,7 @@ assert(VoidMarkMiniMapFrame.resizing)
 assert(VoidMarkMiniMapDB.point=="TOPLEFT")
 cursorX=980
 grip.scripts.OnUpdate()
-assert(Minimap.width==420,"Resize must account for effective UI scale")
+assert(MapSize()==420,"Resize must account for effective UI scale")
 combat=true
 event("PLAYER_REGEN_DISABLED")
 assert(not VoidMarkMiniMapFrame.resizing)
@@ -241,10 +244,10 @@ assert(Minimap:GetZoom()==5)
 for i=1,10 do Minimap.scripts.OnMouseWheel(Minimap,-1) end
 assert(Minimap:GetZoom()==0)
 command("reset")
-assert(Minimap.width==300 and VoidMarkMiniMapDB.locked)
+assert(MapSize()==300 and VoidMarkMiniMapDB.locked)
 UIParent:SetSize(400,400)
 command("size 600")
-assert(Minimap.width<=320,"Size must fit screen")
+assert(MapSize()<=320,"Size must fit screen")
 assert(VoidMarkMiniMapFrame.height<=400,"Dock must fit screen too")
 event("ZONE_CHANGED")
 event("PLAYER_ENTERING_WORLD")
@@ -422,7 +425,7 @@ assert(TaliaaFPSFrame.parent==fallback.parent,"Embed native FPS frame in footer"
 assert(TaliaaFPSFrame:GetScript("OnUpdate")==update)
 assert(not TaliaaFPSFrame.mouse and not fallback:IsShown())
 assert(TaliaaFPSDB.scale==1.4 and TaliaaFPSDB.x==-20,"Do not overwrite standalone settings")
-assert(VoidMarkMiniMapFrame.height==Minimap.height+60,"Reserve header and footer space outside terrain")
+assert(VoidMarkMiniMapFrame.height==MapSize()+60,"Reserve header and footer space outside terrain")
 assert(fallback.fontSize>=12 and fallback.fontSize<=14 and fallback.fontFlags=="OUTLINE","Footer must use readable outlined text")
 assert(VoidMarkMiniMapOptions.fps:GetChecked(),"Show FPS defaults on")
 VoidMarkMiniMapOptions.fps:SetChecked(false)

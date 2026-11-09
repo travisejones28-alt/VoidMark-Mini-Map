@@ -965,6 +965,11 @@ local function Initialize()
     _G.GetMinimapShape = function() return "SQUARE" end
     VM.hiddenChrome = CreateFrame("Frame", nil, UIParent)
     VM.hiddenChrome:Hide()
+    -- Blizzard's mail/indicator frames call GetParent():Layout() on mail events
+    -- (UPDATE_PENDING_MAIL); give the hidden parent no-op layout methods.
+    for _, method in ipairs({ "Layout", "MarkDirty", "MarkClean", "UpdateLayout" }) do
+        VM.hiddenChrome[method] = function() end
+    end
     SuppressNativeChrome()
     CreateMailButton()
     header = CreateFrame("Frame", nil, holder)
