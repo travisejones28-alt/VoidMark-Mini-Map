@@ -12,6 +12,8 @@ local HERBS = {
     { "Gromsblood", 250 }, { "Golden Sansam", 260 }, { "Dreamfoil", 270 },
     { "Mountain Silversage", 280 }, { "Plaguebloom", 285 }, { "Icecap", 290 },
     { "Black Lotus", 300 },
+    -- Forever starter-zone herbs; requirement assumed 1 until the game says otherwise.
+    { "Wilted Peacebloom", 1 }, { "Stunted Silverleaf", 1 },
 }
 local BANDS = { "red", "orange", "yellow", "green", "grey" }
 local COLORS = {
@@ -23,12 +25,26 @@ local SKILL_NAMES = { Herbalism = true, ["Kräuterkunde"] = true, ["Herborister�
     ["Herboristerie"] = true, ["Erbalismo"] = true, ["Herborismo"] = true,
     ["Травничество"] = true, ["약초채집"] = true, ["草药学"] = true, ["草藥學"] = true }
 
--- Classic gathering colors: orange until req+25, yellow until +50, green until +100.
-local function Band(skill, req)
+-- Color steps above the requirement. Classic: yellow at +25, green at +50, grey at +100.
+-- Forever can differ, so the game's own tooltip color corrects these (see Learn below).
+local DEFAULT_STEPS = { yellow = 25, green = 50, grey = 100 }
+local function Learned()
+    local db = VoidMarkMiniMapDB
+    return type(db) == "table" and type(db.herbLearn) == "table" and db.herbLearn or nil
+end
+local function Steps(name)
+    local learned = Learned()
+    if not learned then return DEFAULT_STEPS end
+    return (name and learned[name]) or learned["*"] or DEFAULT_STEPS
+end
+
+local function Band(skill, req, name)
+    local s = Steps(name)
     if skill < req then return "red" end
-    if skill < req + 25 then return "orange" end
-    if skill < req + 50 then return "yellow" end
-    if skill < req + 100 then return "green" end
+    local over = skill - req
+    if over < s.yellow then return "orange" end
+    if over < s.green then return "yellow" end
+    if over < s.grey then return "green" end
     return "grey"
 end
 
@@ -70,6 +86,66 @@ local box, swatch, label
 local hoverHerb, hoverAt = nil, 0
 local HERB_REQ = {}
 for i = 1, #HERBS do HERB_REQ[HERBS[i][1]] = HERBS[i][2] end
+local function ReqOf(name)
+    local learned = Learned()
+    local entry = learned and learned[name]
+    return (type(entry) == "table" and entry.req) or HERB_REQ[name]
+end
+local function BandOf(rank, name) return Band(rank, ReqOf(name), name) end
+
+-- Map the game's tooltip line color to a band (trade-skill difficulty colors).
+local function ColorBand(r, g, b)
+    if type(r) ~= "number" or type(g) ~= "number" or type(b) ~= "number" then return nil end
+    if r > 0.85 and g < 0.3 and b < 0.3 then return "red" end
+    if r > 0.85 and g >= 0.35 and g <= 0.65 and b < 0.45 then return "orange" end
+    if r > 0.85 and g >= 0.75 and b < 0.3 then return "yellow" end
+    if g > 0.6 and r < 0.5 and b < 0.5 then return "green" end
+    if math.abs(r - g) < 0.08 and math.abs(g - b) < 0.08 and r > 0.35 and r < 0.75 then return "grey" end
+    return nil
+end
+
+-- Narrow the color steps so they agree with what the game showed at this skill.
+local function Fit(s, band, over)
+    if band == "orange" then
+        s.yellow = math.max(s.yellow, over + 1)
+        s.green = math.max(s.green, s.yellow); s.grey = math.max(s.grey, s.green)
+    elseif band == "yellow" then
+        s.yellow = math.min(s.yellow, over); s.green = math.max(s.green, over + 1)
+        s.grey = math.max(s.grey, s.green)
+    elseif band == "green" then
+        s.green = math.min(s.green, over); s.grey = math.max(s.grey, over + 1)
+        s.yellow = math.min(s.yellow, s.green)
+    elseif band == "grey" then
+        s.grey = math.min(s.grey, over)
+        s.green = math.min(s.green, s.grey); s.yellow = math.min(s.yellow, s.green)
+    end
+end
+
+local function Learn(name, band, rank)
+    local db = VoidMarkMiniMapDB
+    if type(db) ~= "table" or not HERB_REQ[name] or type(rank) ~= "number" or not band then return false end
+    db.herbLearn = type(db.herbLearn) == "table" and db.herbLearn or {}
+    local learned = db.herbLearn
+    local base = learned["*"] or DEFAULT_STEPS
+    local own = learned[name]
+    if type(own) ~= "table" then
+        own = { yellow = base.yellow, green = base.green, grey = base.grey }
+        learned[name] = own
+    end
+    local req = own.req or HERB_REQ[name]
+    if band == "red" then
+        if rank >= req then own.req = rank + 1 end
+        return true
+    end
+    if rank < req then own.req = rank; req = rank end
+    local over = rank - req
+    if type(learned["*"]) ~= "table" then
+        learned["*"] = { yellow = DEFAULT_STEPS.yellow, green = DEFAULT_STEPS.green, grey = DEFAULT_STEPS.grey }
+    end
+    Fit(learned["*"], band, over)
+    Fit(own, band, over)
+    return true
+end
 local skill, maxSkill
 local MEANING = { orange = "skill-up", yellow = "likely skill-up", green = "unlikely skill-up", grey = "no skill-up" }
 
@@ -85,8 +161,8 @@ local function Refresh()
     local accent = ACCENTS[db.accent] or ACCENTS.purple
     if db.purple == false then accent = { 0.35, 0.35, 0.35 } end
     box:SetBackdropBorderColor(accent[1], accent[2], accent[3], 1)
-    local req = HERB_REQ[hoverHerb]
-    local band = Band(skill, req)
+    local req = ReqOf(hoverHerb)
+    local band = Band(skill, req, hoverHerb)
     local c = COLORS[band]
     swatch:SetColorTexture(c[1], c[2], c[3], 1)
     label:SetText(hoverHerb .. "  " .. (band == "red" and ("needs " .. req) or MEANING[band]))
@@ -170,13 +246,35 @@ local function Decorate(text, rank)
     end
     table.sort(taken, function(a, b) return a[1] > b[1] end)
     for _, span in ipairs(taken) do
-        text = text:sub(1, span[1] - 1) .. Square(Band(rank, HERB_REQ[span[3]])) .. text:sub(span[1])
+        text = text:sub(1, span[1] - 1) .. Square(BandOf(rank, span[3])) .. text:sub(span[1])
     end
     return text
 end
 
 local lastTip
 local tipsSeen = 0
+-- World tooltip (hovering the herb itself): line 2 is the skill name in the game's
+-- difficulty color. Read it and learn; cheap early-outs since this runs per frame.
+local lastWorld, lastLearnKey
+local function WorldRead()
+    local first, second = _G.GameTooltipTextLeft1, _G.GameTooltipTextLeft2
+    local name = first and first.GetText and first:GetText()
+    if not name or not HERB_REQ[name] or not second or not second.GetText then return end
+    local text = second:GetText()
+    if type(text) ~= "string" then return end
+    local rank = skill or ReadSkill()
+    local r, g, b
+    if second.GetTextColor then r, g, b = second:GetTextColor() end
+    local key = name .. "|" .. tostring(rank) .. "|" .. text .. "|" .. tostring(r) .. tostring(g) .. tostring(b)
+    if key == lastLearnKey then return end
+    lastLearnKey = key
+    local isSkill = false
+    for word in pairs(SKILL_NAMES) do if text:find(word, 1, true) then isSkill = true; break end end
+    if not isSkill then return end
+    local band = ColorBand(r, g, b)
+    lastWorld = { name = name, rank = rank, band = band, r = r, g = g, b = b }
+    if band and Learn(name, band, rank) and Refresh then Refresh() end
+end
 local lastOwner, lastOwnerName
 local function DecorateTooltip(tooltip)
     local db = VoidMarkMiniMapDB
@@ -184,7 +282,7 @@ local function DecorateTooltip(tooltip)
     local squares = db.herbTip ~= false
     local owner = tooltip.GetOwner and tooltip:GetOwner()
     local overMap = Minimap and Minimap.IsMouseOver and Minimap:IsMouseOver()
-    if owner ~= Minimap and not overMap then lastTip = nil; return end
+    if owner ~= Minimap and not overMap then lastTip = nil; WorldRead(); return end
     if owner ~= lastOwner then
         lastOwner = owner
         lastOwnerName = owner and owner.GetName and owner:GetName() or (owner and "unnamed frame") or "none"
@@ -268,6 +366,10 @@ SlashCmdList.VOIDMARKHERB = function(msg)
     local arg = ((msg or ""):match("^%s*%S+%s+(%S+)") or ""):lower()
     if cmd == "on" then db.herb = true
     elseif cmd == "off" then db.herb = false
+    elseif cmd == "reset" then
+        db.herbLearn = nil; lastLearnKey = nil
+        print("|cffb366ffVoidMark herbs:|r learned colors cleared; back to Classic steps until you hover herbs.")
+        return
     elseif cmd == "tip" and (arg == "on" or arg == "off") then db.herbTip = arg == "on"; return
     elseif cmd == "scan" then
         print("|cffb366ffVoidMark herbs:|r hover a herb on the map now; scanning in 3 seconds...")
@@ -275,12 +377,21 @@ SlashCmdList.VOIDMARKHERB = function(msg)
         return
     else
         local rank, maxRank = ReadSkill()
-        print("|cffb366ffVoidMark herbs:|r /vmherb on|off (hover box), tip on|off (label squares), scan")
+        print("|cffb366ffVoidMark herbs:|r /vmherb on|off (hover box), tip on|off (label squares), scan, reset")
         print("  Herbalism: " .. (rank and (rank .. "/" .. (maxRank or "?")) or "not found (no Herbalism on this character?)"))
         print("  Side box: " .. (box and (box:IsShown() and "shown" or "hidden") or "not attached") ..
             " | setting " .. tostring(db.herb ~= false))
         print("  Map label hook: " .. tostring(tipHooked) .. " | map tooltips seen: " .. tipsSeen .. " (last owner: " .. (lastOwnerName or "none") .. ")" ..
             " | setting " .. tostring(db.herbTip ~= false))
+        local s = Steps(nil)
+        local count = 0
+        for k in pairs(Learned() or {}) do if k ~= "*" then count = count + 1 end end
+        print("  Colors: yellow at +" .. s.yellow .. ", green at +" .. s.green .. ", grey at +" .. s.grey ..
+            (count > 0 and (" (learned from game, " .. count .. " herbs)") or " (Classic default; hover herbs in the world to learn)"))
+        if lastWorld then
+            print(string.format("  Last game read: %s at %s = %s (%.2f %.2f %.2f)", lastWorld.name, tostring(lastWorld.rank),
+                lastWorld.band or "unrecognized color", lastWorld.r or 0, lastWorld.g or 0, lastWorld.b or 0))
+        end
         return
     end
     Attach()
@@ -288,5 +399,5 @@ SlashCmdList.VOIDMARKHERB = function(msg)
 end
 
 -- Exposed for tests.
-_G.VoidMarkMiniMapHerb = { Band = Band, ReadSkill = ReadSkill, Attach = Attach, Refresh = Refresh,
+_G.VoidMarkMiniMapHerb = { Band = Band, BandOf = BandOf, ColorBand = ColorBand, Learn = Learn, WorldRead = WorldRead, ReadSkill = ReadSkill, Attach = Attach, Refresh = Refresh,
     Box = function() return box end, Label = function() return label end, Scan = Scan, Decorate = Decorate, DecorateTooltip = DecorateTooltip }

@@ -88,4 +88,30 @@ assert(box.shown==false, "non-herb label keeps box hidden")
 local printed={}; local realPrint=print; print=function(...) printed[#printed+1]=table.concat({...}," ") end
 SlashCmdList.VOIDMARKHERB(""); print=realPrint
 assert(#printed>=4 and printed[2]:find("120/150",1,true), "status shows skill")
+-- In-game color learning (Forever): world tooltip line 2 shows the real difficulty color.
+local C = H.ColorBand
+assert(C(1,1,0)=="yellow" and C(1,0.82,0)=="yellow" and C(1,0.5,0.25)=="orange")
+assert(C(0.25,0.75,0.25)=="green" and C(0.5,0.5,0.5)=="grey" and C(1,0.1,0.1)=="red" and C(1,1,1)==nil)
+assert(H.BandOf(169,"Wild Steelbloom")=="green", "Classic default before learning")
+GameTooltipTextLeft2 = CreateFrame()
+function GameTooltipTextLeft2:GetText() return self.text end
+function GameTooltipTextLeft2:GetTextColor() return unpack(self.rgb) end
+lines = { {"Professions",true}, {"Herbalism",false,nil,169,nil,nil,225,182} }
+H.Refresh()
+Minimap.IsMouseOver=nil; GameTooltip.owner = {}
+GameTooltipTextLeft1.text = "Wild Steelbloom"; GameTooltipTextLeft2.text = "Herbalism"; GameTooltipTextLeft2.rgb = {1,1,0}
+hooks.OnShow(GameTooltip)
+assert(H.BandOf(169,"Wild Steelbloom")=="yellow", "game said yellow at 169 -> learned")
+assert(H.BandOf(152,"Bruiseweed")=="yellow", "other herbs use learned global steps (+52 is yellow now)")
+assert(VoidMarkMiniMapDB.herbLearn["*"].green==55, "green now starts at +55")
+GameTooltipTextLeft2.rgb = {0.25,0.75,0.25}; lines[2][4]=180; H.Refresh(); hooks.OnUpdate(GameTooltip)
+assert(H.BandOf(180,"Wild Steelbloom")=="green" and VoidMarkMiniMapDB.herbLearn["Wild Steelbloom"].green<=65)
+-- Red with enough classic skill means Forever raised the requirement.
+GameTooltipTextLeft1.text = "Liferoot"; GameTooltipTextLeft2.text = "Requires Herbalism"; GameTooltipTextLeft2.rgb = {1,0.1,0.1}
+hooks.OnShow(GameTooltip)
+assert(H.BandOf(180,"Liferoot")=="red" and VoidMarkMiniMapDB.herbLearn["Liferoot"].req==181)
+-- Non-skill second line is ignored.
+GameTooltipTextLeft1.text = "Fadeleaf"; GameTooltipTextLeft2.text = "Level 30"; GameTooltipTextLeft2.rgb = {1,1,0}
+hooks.OnShow(GameTooltip); assert(VoidMarkMiniMapDB.herbLearn["Fadeleaf"]==nil)
+SlashCmdList.VOIDMARKHERB("reset"); assert(VoidMarkMiniMapDB.herbLearn==nil and H.BandOf(169,"Wild Steelbloom")=="green")
 print("PASS: herb box")
