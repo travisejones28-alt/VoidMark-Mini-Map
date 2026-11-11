@@ -35,7 +35,8 @@ return function(t)
   VoidMarkMiniMapOptions.iconScale:SetValue(value)
   assert(Minimap.iconScale==value and MapSize()==420,'Icon size must not compound terrain scale')
  end
- option('rotate',true);assert(GetCVar('rotateMinimap')=='1')
+ -- 0.3.x retired the rotation option: a native rotate CVar is turned back off.
+ SetCVar('rotateMinimap','1')
  -- Forever delivers its native CVar update after our initial layout. The
  -- callback replaces the terrain mask and shows the circular compass underlay.
  MinimapCluster:UpdateMinimapConfig();tick()
@@ -43,20 +44,22 @@ return function(t)
  assert(not MinimapCompassTextureUnderlay:IsShown(),'Suppress rotation circle')
  MinimapCompassTextureUnderlay:Show()
  assert(not MinimapCompassTextureUnderlay.parent:IsShown(),'Native Show cannot reveal ring under hidden parent')
- Minimap:SetMaskTexture('another-native-mask');tick()
- assert(Minimap.mask=='Interface\\Buttons\\WHITE8X8','Direct native mask restoration is observed')
+ -- 0.3: native SetMaskTexture is not hooked (Forever can pass secret values);
+ -- the square mask comes back on the next native layout callback instead.
+ Minimap:SetMaskTexture('another-native-mask');MinimapCluster:UpdateMinimapConfig();tick()
+ assert(Minimap.mask=='Interface\\Buttons\\WHITE8X8','Square mask restored by the next native layout')
  t.combat(true);MinimapCluster:UpdateMinimapConfig();tick()
  assert(Minimap.mask=='ui-hud-minimap-frame-generic-mask','Mask restoration defers during combat')
  t.combat(false);t.event('PLAYER_REGEN_ENABLED')
  assert(Minimap.mask=='Interface\\Buttons\\WHITE8X8','Mask restored after combat')
  option('headerBelow',true)
- assert(t.header.point[3]=='BOTTOMRIGHT' and Minimap.height==420,'Header below, independent terrain')
+ assert(t.header.point[3]=='BOTTOMRIGHT' and MapSize()==420,'Header below, independent terrain')
  option('headerBelow',false);assert(t.header.point[3]=='TOPRIGHT' and t.header.point[5]==24,'Header above outside map')
  -- Reproduce native layout rewriting detached map and invisible cluster.
  Minimap:SetParent(MinimapCluster.MinimapContainer);Minimap:SetScale(2)
  Minimap:SetSize(150,150);Minimap:SetIconScale(.75);MinimapCluster:EnableMouse(true)
  tick()
- assert(Minimap.parent==VoidMarkMiniMapFrame and Minimap.width==420 and Minimap:GetScale()==1)
+ assert(Minimap.parent==VoidMarkMiniMapMapViewport and MapSize()==420,'Native writes are undone')
  assert(Minimap.iconScale==1.25 and not MinimapCluster.mouse,'Restore settings after native writes')
  local original=Minimap.iconScale
  t.combat(true);VoidMarkMiniMapOptions.iconScale:SetValue(2)
