@@ -4,6 +4,7 @@
 ## Author: Taliaa
 ## Version: 0.3.17
 ## SavedVariablesPerCharacter: VoidMarkMiniMapDB
+## SavedVariables: VoidMarkMiniMapUsage
 ## OptionalDeps: VoidMarkMarket, TaliaaFPS, Leatrix_Plus, MoveAny, SexyMap, ElvUI
 
 Help.lua
@@ -13,3 +14,4 @@ VoidMarkMiniMap.lua
 Layer.lua
 Herb.lua
 AutoInvite.lua
+Usage.lua
