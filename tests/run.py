@@ -12,6 +12,20 @@ for source in root.glob('*.lua'):
 toc = (root/'VoidMarkMiniMap.toc').read_text(encoding='utf-8')
 assert '## Interface: 16001' in toc
 assert toc.index('Footer.lua') < toc.index('Repair.lua') < toc.index('VoidMarkMiniMap.lua')
+# Help window lists every slash subcommand the handlers accept.
+import re
+help_text = (root/'Help.lua').read_text(encoding='utf-8')
+for file, prefix in (('VoidMarkMiniMap.lua', '/vmini'), ('Herb.lua', '/vmherb'), ('Layer.lua', '/vmlayer')):
+    source = (root/file).read_text(encoding='utf-8')
+    handler = source[source.index('SlashCmdList.VOIDMARK'):]
+    words = set(re.findall(r'(?:command|cmd) *== *"(\w+)"', handler))
+    assert words, file
+    listed = set()
+    for entry in re.findall(r"\{'(" + re.escape(prefix) + r"[^']*)'", help_text):
+        listed.update(re.findall(r'\w+', entry))
+    missing = sorted(w for w in words if w not in listed and w not in ('faq', 'commands'))
+    assert not missing, f'Help.lua is missing {prefix} commands: {missing}'
+assert toc.index('Help.lua') < toc.index('VoidMarkMiniMap.lua')
 runtime.execute("dofile('Footer.lua'); dofile('tests/footer.lua')")
 runtime = LuaRuntime()
 runtime.execute("dofile('tests/herb.lua')")

@@ -14,6 +14,7 @@ Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC, `Footer.lua`, `
 ## Controls
 
 - `/vmini` or `/voidmarkminimap`: settings window.
+- `/vmini help` or the **Help & commands** button in settings: a searchable FAQ with every `/vmini`, `/vmherb` and `/vmlayer` command (0.3.17).
 - `/vmini unlock`: drag the zone-name bar to move the map.
 - While unlocked, drag the bottom-right `//` handle horizontally to resize. Locking also hides this handle.
 - `/vmini lock`: lock it again.

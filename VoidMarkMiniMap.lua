@@ -888,6 +888,8 @@ local function ToggleOptions()
             db.accent=nextColor[db.accent] or "purple"; db.purple=true; Apply()
         end)
         options.accent:SetPoint("TOPLEFT",22,-482)
+        options.help = Button(options, "Help & commands", 150, function() if _G.VoidMarkMiniMapHelp then _G.VoidMarkMiniMapHelp.Open() end end)
+        options.help:SetPoint("TOPLEFT", 214, -482)
         options.herb = Check("Show herb box when hovering a herb", -514, "herb")
         Tooltip(options.herb,"Herb skill box","Pops up left of the map while you hover a herb: its color and whether it gives a skill-up.")
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
@@ -1133,9 +1135,12 @@ SLASH_VOIDMARKMINIMAP2 = "/voidmarkminimap"
 -- Market owns /vmm when both addons load; OptionalDeps establishes that order.
 if not _G.VoidMarkMarket then SLASH_VOIDMARKMINIMAP3 = "/vmm" end
 SlashCmdList.VOIDMARKMINIMAP = function(message)
-    if not ready then ToggleOptions(); return end
     local command, value = (message or ""):match("^%s*(%S*)%s*(.-)%s*$")
     command = command:lower()
+    if (command == "help" or command == "faq" or command == "commands") and _G.VoidMarkMiniMapHelp then
+        _G.VoidMarkMiniMapHelp.Open(value ~= "" and value or nil); return
+    end
+    if not ready then ToggleOptions(); return end
     if command == "lock" or command == "unlock" then
         db.locked = command == "lock"; Apply()
         Say(db.locked and "Position locked." or "Drag the zone bar to move the map.")
@@ -1144,7 +1149,7 @@ SlashCmdList.VOIDMARKMINIMAP = function(message)
         db.size = Size(value); Apply()
     elseif command == "reset" then Reset()
     elseif command == "" then ToggleOptions()
-    else Say("/vmini | /vmini unlock | /vmini lock | /vmini size 350 | /vmini reset") end
+    else Say("/vmini | /vmini unlock | /vmini lock | /vmini size 350 | /vmini reset | /vmini help") end
     if pending then Say("Layout will update after combat.") end
 end
 

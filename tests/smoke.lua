@@ -141,6 +141,9 @@ function print(text) messages[#messages+1]=text end
 VoidMarkMiniMapDB={size=0/0,point="garbage",x=math.huge,locked="bad",clock=true}
 if VMM_TEST_SAVED_SETTINGS then VoidMarkMiniMapDB.durability=false;VoidMarkMiniMapDB.latency=false end
 if VMM_TEST_OLD_FPS_OFF then VoidMarkMiniMapDB.fps=false end
+function Methods:SetScrollChild(c) self.child=c end
+function Methods:ClearFocus() end
+assert(loadfile("Help.lua"))()
 assert(loadfile("Footer.lua"))()
 assert(loadfile("Repair.lua"))()
 assert(loadfile("VoidMarkMiniMap.lua"))("VoidMarkMiniMap")
@@ -684,5 +687,18 @@ assert(x>=0 and x+latency.width<=600,'Latency-only layout escaped minimap')
 setOption('latency',false);setOption('fps',true)
 assert(not latency:IsShown() and nativeFPS:IsShown(),'FPS-only mode must hide latency')
 realPrint('PASS: FPS-only, latency-only, both/neither with built-in and embedded providers; independent saved toggles')
+
+-- Help & commands window: from the slash command and the settings button.
+command('help lock')
+assert(VoidMarkMiniMapHelpWindow and VoidMarkMiniMapHelpWindow:IsShown(),'Help window opens from /vmini help')
+local helpText,found=VoidMarkMiniMapHelp.Text('lock')
+assert(found>0 and helpText:find('/vmini lock',1,true),'Help search finds commands')
+VoidMarkMiniMapHelpWindow:Hide()
+if VoidMarkMiniMapOptions and VoidMarkMiniMapOptions.help then
+ VoidMarkMiniMapOptions.help.scripts.OnClick()
+ assert(VoidMarkMiniMapHelpWindow:IsShown(),'Help button in settings opens the window')
+ VoidMarkMiniMapHelpWindow:Hide()
+end
+realPrint('PASS: Help & commands window from /vmini help and settings')
 
 dofile('tests/compatibility.lua')({controller=controller,event=event,command=command,frames=frames,header=drag,icon=icon,combat=function(v)combat=v end,print=realPrint})
