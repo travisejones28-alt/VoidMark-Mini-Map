@@ -5,7 +5,7 @@
 local P = {}
 _G.VoidMarkMiniMapParty = P
 
-local SIZES = { small = 14, medium = 18, large = 24 }
+local SIZES = { small = 10, medium = 13, large = 17 }
 local NEXT_SIZE = { small = "medium", medium = "large", large = "small" }
 -- Yards shown across the full minimap width per zoom level (same as HereBeDragons).
 local OUTDOOR = { [0] = 466 + 2 / 3, 400, 333 + 1 / 3, 266 + 2 / 3, 200, 133 + 1 / 3 }
@@ -188,7 +188,7 @@ local function Draw(pin, unit, size, half, ypp)
     pin.Ring:SetSize(size + 4, size + 4)
     pin.Dot:SetSize(size, size); pin.Dot:SetVertexColor(r, g, b, 1)
     local path, _, flags = pin.Letter:GetFont()
-    if path then pin.Letter:SetFont(path, math.floor(size * 0.62), flags) end
+    if path then pin.Letter:SetFont(path, math.max(8, math.floor(size * 0.65)), flags) end
     pin.Letter:SetText(FirstLetter(unit))
     pin:ClearAllPoints()
     pin:SetPoint("CENTER", layer, "CENTER", x, y)

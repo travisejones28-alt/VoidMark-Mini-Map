@@ -71,7 +71,7 @@ eq(#pins>=2,true); eq(pins[3] and pins[3].shown or false,false,"unused pin hidde
 eq(pins[1].Letter.text,'K'); assert(pins[1].point[4]>38 and pins[1].point[4]<39,'K x '..pins[1].point[4]); near(pins[1].point[5],0)
 eq(pins[1].Arrow.shown,false,'no arrow on map')
 -- party2: next zone east, 0.6*3000=1800 yd away -> edge, arrow pointing east, distance shown.
-eq(pins[2].Letter.text,'T'); eq(pins[2].Arrow.shown,true,'edge arrow'); near(pins[2].point[4],150-(18/2+3))
+eq(pins[2].Letter.text,'T'); eq(pins[2].Arrow.shown,true,'edge arrow'); near(pins[2].point[4],150-(13/2+3))
 near(pins[2].Arrow.rotation,-math.pi/2,'arrow points east'); eq(pins[2].Distance.text,'1800 yd')
 -- North-west of you (same zone): arrow points up-left, marker on top-left edge.
 pos.party2={1,0.2,0.1}; P.Update()
