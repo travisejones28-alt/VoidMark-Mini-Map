@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: VoidMark Mini Map
-## Notes: Large square minimap with movable frame and adjustable size for Forever.
+## Notes: Large square minimap with movable frame and adjustable size for Forever. Big party markers with edge arrows.
 ## Author: Taliaa
-## Version: 0.3.17
+## Version: 0.3.18
 ## SavedVariablesPerCharacter: VoidMarkMiniMapDB
 ## OptionalDeps: VoidMarkMarket, TaliaaFPS, Leatrix_Plus, MoveAny, SexyMap, ElvUI
 
@@ -12,4 +12,5 @@ Repair.lua
 VoidMarkMiniMap.lua
 Layer.lua
 Herb.lua
+Party.lua
 AutoInvite.lua

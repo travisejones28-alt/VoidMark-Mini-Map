@@ -15,6 +15,7 @@ Copy the addon into `Interface/AddOns/VoidMarkMiniMap`. The TOC, `Footer.lua`, `
 
 - `/vmini` or `/voidmarkminimap`: settings window.
 - `/vmini help` or the **Help & commands** button in settings: a searchable FAQ with every `/vmini`, `/vmherb` and `/vmlayer` command (0.3.17).
+- **Party markers** (0.3.18): each party member is a big class-colored dot with the first letter of their name, above quest icons. Off the map (your zone or the next one) the dot sits on the map edge with an arrow pointing at them and the distance in yards. On/off and Small/Medium/Large in settings.
 - `/vmini unlock`: drag the zone-name bar to move the map.
 - While unlocked, drag the bottom-right `//` handle horizontally to resize. Locking also hides this handle.
 - `/vmini lock`: lock it again.

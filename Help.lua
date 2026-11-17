@@ -130,5 +130,6 @@ local HELP={title='VoidMark Mini Map: Help & commands',
   {'What is MS?','Server (world) latency, updated every 5 seconds. FPS and MS can be shown separately.'},
   {'Is the layer number official?','No. It is an estimate from nearby creatures and shows [Layer ?] when Forever hides that data.'},
   {'Changed a setting in combat and nothing happened?','Layout changes wait until combat ends, then apply by themselves.'},
+  {'How do the party markers work?','Each party member is a big dot in their class colour with the first letter of their name, drawn above quest icons. If they are off the map (your zone or the next one over), the dot sits on the edge with an arrow pointing at them and the distance in yards. Turn it on/off and change the size in the Mini Map settings.'},
   {'Are settings per character?','Yes. Size, position and options are saved for each character.'}}}}}
 _G.VoidMarkMiniMapHelp=HelpWindow('VoidMarkMiniMapHelpWindow',HELP)
