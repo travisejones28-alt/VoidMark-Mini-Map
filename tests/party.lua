@@ -1,7 +1,7 @@
 -- Party marker regressions: placement math, edge arrows, next-zone projection, secrets, settings.
 local M = {}
 local function obj() return setmetatable({shown=true},{__index=M}) end
-for _,k in ipairs({"SetSize","EnableMouse","SetFrameStrata","SetAllPoints","SetVertexColor","SetShadowOffset","SetTextColor","AddMaskTexture","RegisterEvent"}) do M[k]=function() end end
+for _,k in ipairs({"SetSize","SetFrameLevel","EnableMouse","SetFrameStrata","SetAllPoints","SetVertexColor","SetShadowOffset","SetTextColor","AddMaskTexture","RegisterEvent"}) do M[k]=function() end end
 function M:SetTexture(v) self.texture=v end
 function M:SetPoint(...) self.point={...} end
 function M:ClearAllPoints() self.point=nil end
@@ -13,6 +13,8 @@ function M:SetScript(k,f) self.scripts=self.scripts or {}; self.scripts[k]=f end
 function M:GetFont() return "Fonts/FRIZQT__.TTF",12,"" end
 function M:SetFont(p,s) self.fontSize=s end
 function M:GetWidth() return 300 end
+function M:GetFrameLevel() return 5 end
+function M:IsShown() return self.shown end
 function M:CreateTexture() local t=obj(); FRAMES[#FRAMES+1]=t; return t end
 function M:CreateFontString() return obj() end
 function M:CreateMaskTexture() return obj() end
@@ -96,4 +98,12 @@ eq(P.CycleSize(),'small'); eq(P.CycleSize(),'medium')
 VoidMarkMiniMapDB.party=false; P.Update(); eq(P.shown,0); eq(pins[1].shown,false)
 -- Solo: nothing drawn.
 VoidMarkMiniMapDB.party=true; IsInGroup=function() return false end; P.Update(); eq(P.shown,0)
+-- Your own arrow: on top, turns with facing, solo too; ring when facing is hidden.
+function GetPlayerFacing() return 1.25 end
+P.Update(); local me
+for _,f in ipairs(FRAMES) do if f.Arrow and f.Outline then me=f end end
+assert(me and me.shown,'own arrow shown solo'); near(me.Arrow.rotation,1.25); eq(me.Ring.shown,false)
+function GetPlayerFacing() return SECRET end
+P.UpdateMe(); eq(me.Arrow.shown,false); eq(me.Ring.shown,true,'ring when facing hidden')
+VoidMarkMiniMapDB.selfArrow=false; P.Update(); eq(me.shown,false,'own arrow off')
 print('PASS: party markers - placement, edge arrows, next-zone projection, zoom, secrets, world fallback, settings')

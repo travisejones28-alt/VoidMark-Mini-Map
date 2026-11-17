@@ -25,7 +25,7 @@ end
 local accents = { purple={0.55,0.25,0.85}, cyan={0.1,0.75,0.85}, amber={0.9,0.6,0.15} }
 local defaults = { size = 300, locked = true, clock = true, localClock = false, clock24 = true, durability = true, fps = true, latency = true, purple = true,
     coordinates = false, drawer = true, layer = true, herb = true, accent = "purple",
-    iconScale = 1, rotate = false, headerBelow = false, party = true, partySize = "medium",
+    iconScale = 1, rotate = false, headerBelow = false, party = true, partySize = "medium", selfArrow = true,
     point = "TOPRIGHT", x = -35, y = -45 }
 local points = { TOPLEFT=true, TOP=true, TOPRIGHT=true, LEFT=true, CENTER=true,
     RIGHT=true, BOTTOMLEFT=true, BOTTOM=true, BOTTOMRIGHT=true }
@@ -711,6 +711,7 @@ local function UpdateOptions()
     options.herb:SetChecked(db.herb)
     options.headerBelow:SetChecked(db.headerBelow)
     options.party:SetChecked(db.party)
+    options.selfArrow:SetChecked(db.selfArrow)
     options.partySize:SetText("Party marker size: "..db.partySize)
     options.iconScale:SetValue(db.iconScale)
     options.iconText:SetText(Minimap.SetIconScale and ("Native icon scale: "..math.floor(db.iconScale*100+.5).."%") or "Native icon scale: unavailable on this client")
@@ -831,7 +832,7 @@ local function ToggleOptions()
     if not ready then Say("Minimap is unavailable or another minimap replacement is active."); return end
     if not options then
         options = CreateFrame("Frame", "VoidMarkMiniMapOptions", UIParent, "BackdropTemplate")
-        options:SetSize(390, 800)
+        options:SetSize(390, 830)
         options:SetPoint("CENTER")
         options:SetFrameStrata("DIALOG")
         options:EnableMouse(true)
@@ -896,8 +897,8 @@ local function ToggleOptions()
         options.herb = Check("Show herb box when hovering a herb", -514, "herb")
         Tooltip(options.herb,"Herb skill box","Pops up left of the map while you hover a herb: its color and whether it gives a skill-up.")
         local compatibility=options:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
-        compatibility:SetPoint("TOPLEFT",22,-735)
-        compatibility:SetPoint("TOPRIGHT",-22,-735)
+        compatibility:SetPoint("TOPLEFT",22,-765)
+        compatibility:SetPoint("TOPRIGHT",-22,-765)
         compatibility:SetText("Disable minimap movement/styling in Leatrix Plus or MoveAny if enabled.")
         options.headerBelow=Check("Zone header below map",-548,"headerBelow")
         options.iconText=options:CreateFontString(nil,"OVERLAY","GameFontHighlight")
@@ -918,6 +919,7 @@ local function ToggleOptions()
             if _G.VoidMarkMiniMapParty then _G.VoidMarkMiniMapParty.CycleSize() end; UpdateOptions()
         end)
         options.partySize:SetPoint("TOPLEFT",22,-692)
+        options.selfArrow=Check("My arrow on top of quest icons",-722,"selfArrow")
         Tooltip(options.iconScale,"Native map icons","Scales supported quest/POI indicators, not terrain or addon buttons. Requires the client SetIconScale API.")
         Tooltip(sizeSlider,"Visible map size","Changes terrain width and height in UI units without scaling buttons or the player arrow.")
         options.status = options:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")

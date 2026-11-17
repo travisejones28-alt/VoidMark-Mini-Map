@@ -35,6 +35,7 @@ local function Settings()
     if type(db) ~= "table" then return nil end
     if type(db.party) ~= "boolean" then db.party = true end
     if not SIZES[db.partySize] then db.partySize = "medium" end
+    if type(db.selfArrow) ~= "boolean" then db.selfArrow = true end
     return db
 end
 
@@ -215,6 +216,47 @@ local function Draw(pin, unit, size, half, ypp)
     return true
 end
 
+---------------------------------------------------------------------------
+-- Your own arrow, drawn on top of quest icons (the native one sits under them)
+---------------------------------------------------------------------------
+local me
+local function BuildMe()
+    me = CreateFrame("Frame", nil, layer)
+    me:SetSize(26, 26)
+    me:SetPoint("CENTER", layer, "CENTER", 0, 0)
+    me:SetFrameLevel((layer.GetFrameLevel and layer:GetFrameLevel() or 0) + 20)
+    me:EnableMouse(false)
+    -- Black copy slightly larger behind = outline.
+    me.Outline = me:CreateTexture(nil, "ARTWORK", nil, 1)
+    me.Outline:SetTexture("Interface\\Minimap\\MinimapArrow")
+    me.Outline:SetSize(30, 30); me.Outline:SetPoint("CENTER")
+    me.Outline:SetVertexColor(0, 0, 0, 1)
+    me.Arrow = me:CreateTexture(nil, "ARTWORK", nil, 2)
+    me.Arrow:SetTexture("Interface\\Minimap\\MinimapArrow")
+    me.Arrow:SetSize(26, 26); me.Arrow:SetPoint("CENTER")
+    -- If Forever hides your facing, a ring marks where you are instead.
+    me.Ring = Round(me, "ARTWORK", 0)
+    me.Ring:SetSize(14, 14); me.Ring:SetPoint("CENTER")
+    me.Ring:SetVertexColor(1, 1, 1, 1)
+    me.Ring:Hide()
+end
+
+function P.UpdateMe()
+    local db = Settings()
+    if not layer then return end
+    if not (db and db.selfArrow) then if me then me:Hide() end; return end
+    if not me then BuildMe() end
+    local facing = tonumber((Call(GetPlayerFacing)))
+    if facing and facing == facing then
+        if me.Arrow.SetRotation then me.Arrow:SetRotation(facing); me.Outline:SetRotation(facing) end
+        me.Arrow:Show(); me.Outline:Show(); me.Ring:Hide()
+    else
+        me.Arrow:Hide(); me.Outline:Hide(); me.Ring:Show()
+    end
+    me:Show()
+    P.facing = facing
+end
+
 function P.Update()
     local db = Settings()
     local viewport = _G.VoidMarkMiniMapMapViewport
@@ -242,6 +284,7 @@ function P.Update()
     end
     for i = used + 1, #pins do pins[i]:Hide() end
     P.shown = used
+    P.UpdateMe()
 end
 
 function P.CycleSize()
@@ -263,6 +306,8 @@ driver:SetScript("OnEvent", function(_, event)
 end)
 -- 10 updates a second while grouped; nothing at all when solo.
 driver:SetScript("OnUpdate", function(_, delta)
+    -- Your arrow turns every frame so it never lags behind the camera.
+    if me and me:IsShown() then P.UpdateMe() end
     elapsed = elapsed + delta
     if elapsed < 0.1 then return end
     elapsed = 0
