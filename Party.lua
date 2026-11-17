@@ -167,7 +167,7 @@ end
 local function Units()
     local list = {}
     local raid = Call(IsInRaid)
-    local count = tonumber(Call(GetNumGroupMembers)) or 0
+    local count = tonumber((Call(GetNumGroupMembers))) or 0
     if raid then
         for i = 1, math.min(40, count) do
             local u = "raid" .. i
